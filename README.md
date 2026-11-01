@@ -1,95 +1,172 @@
 # CollabAI
 
-A real-time collaborative document editor — built from scratch to understand and demonstrate the systems that power tools like Google Docs: Operational Transformation, WebSocket synchronization, a Redis/MongoDB persistence split, JWT authentication, and an AI-powered conflict mediator.
+A real-time collaborative document editor inspired by Google Docs and modern productivity SaaS products — built to understand and demonstrate the distributed systems that power concurrent editing: Operational Transformation (OT), WebSocket synchronization, dual-layer Redis/MongoDB persistence, JWT authentication with instant revocation, and Google Gemini AI conflict mediation.
 
-## What it does
+---
 
-Multiple users can edit the same document simultaneously. Every keystroke syncs across all connected clients in real time, conflicting edits are resolved using a custom-built Operational Transformation (OT) algorithm, and an AI layer (Google Gemini) detects when two users may have edited overlapping text and suggests a clean merge.
+## Highlights & Capabilities
 
-## Why this project
+- **Real-Time Operational Transformation (OT)**: Built from first principles to handle concurrent multi-character insertions and deletions without race conditions, duplicate-echo bugs, or document corruption.
+- **Google Docs-Inspired Interface**: Clean, distraction-free document canvas mimicking an authentic 8.5" x 11" page with margins, elevation, live character/word counters, paragraph formatting, and status indicators.
+- **Google Gemini 2.0 Flash AI Integration**:
+  - **Proactive AI Writing Assistant**: Streams typo and grammar corrections directly into an interactive review drawer.
+  - **Semantic Conflict Mediator**: Proximity-based heuristic (concurrent edits within 4 seconds and 30 characters) triggers Gemini to evaluate semantic collisions and recommend clean merges.
+- **Dual Persistence Architecture**: In-memory Redis hot-path for low-latency keystroke reads and instant session revocations, with resilient in-memory fallback and periodic asynchronous flushes to MongoDB for durable checkpoints.
+- **Interactive Document Dashboard**: Document search, template gallery (Blank Document, Project Proposal, Meeting Notes), and document management.
+- **Demo-User Authentication**: Zero-barrier multi-user testing with switchable collaborator profiles (Alex Rivera, Sarah Chen, David Kim) issuing 15-minute JWT access tokens and 7-day refresh tokens.
 
-Most CRUD projects don't force you to reason about concurrency, conflict resolution, or the tradeoffs between consistency and performance. This one does. Every core design decision below came from actually hitting the problem first — a race condition, a duplicate-echo bug, a corrupted document — and then fixing it properly rather than working around it.
+---
 
-## Architecture
+## System Architecture
 
-### 1. Real-time sync — WebSockets (Socket.IO)
-Clients don't poll for changes. Edits are pushed to the server over a persistent WebSocket connection and broadcast to every other client in the same document "room" the moment they're applied.
+```
+                    ┌─────────────────────────────────┐
+                    │       Browser Client (SPA)      │
+                    │   Google Docs Page Canvas       │
+                    │   Prefix/Suffix Diff Engine     │
+                    └───────────────┬─────────────────┘
+                                    │ WebSockets (Socket.IO)
+                                    ▼
+                    ┌─────────────────────────────────┐
+                    │      Node.js / Express Server   │
+                    │  OT History Transform Engine    │
+                    │  JWT Auth & Session Controller  │
+                    └───────┬───────────────┬─────────┘
+                            │               │
+            ┌───────────────┴────┐     ┌────┴────────────────┐
+            ▼                    ▼     ▼                     ▼
+   ┌─────────────────┐ ┌─────────────┐ ┌─────────────────────────┐
+   │  Redis Hot Path │ │  MongoDB    │ │  Google Gemini API      │
+   │  (Active Docs,  │ │  (Durable   │ │  (Streaming Typo Fixes, │
+   │  Refresh Tokens)│ │  Storage)   │ │  Semantic Conflict Med.)│
+   └─────────────────┘ └─────────────┘ └─────────────────────────┘
+```
 
-### 2. Conflict resolution — Operational Transformation, built from scratch
-When two users edit the same region of a document at nearly the same time, naive last-write-wins would corrupt the document. This project implements OT from first principles:
-- Supports both single-character and multi-character insert/delete operations (a full prefix/suffix diff, not just single-keystroke tracking)
-- Transforms incoming operations against the server's operation history so edits from any number of concurrent users are applied consistently
-- Handles overlapping deletes, position shifts from concurrent inserts, and operation cancellation (e.g. two users deleting the same character)
+### 1. Concurrency via Operational Transformation
+Clients calculate minimal positional diffs (`type: 'insert' | 'delete', position, text/count`) using a common-prefix and common-suffix comparison algorithm. Incoming client edits are transformed against the server's operation history (`opHistory`) starting from the client's `baseVersion`. The sender receives an acknowledgment (`operation-ack`) while peers receive transformed operations (`operation`), preserving local cursor positions across incoming edits.
 
-### 3. Persistence — Redis (hot path) + MongoDB (durable storage)
-Live document state lives in an in-memory object on the server for correctness (OT requires synchronous, ordered operation application) and is mirrored to Redis on every operation for fast reads on reconnect. Every 10 operations, the document is flushed to MongoDB for durable, long-term storage — avoiding a database write on every keystroke while still guaranteeing persistence.
+### 2. Dual-Layer Storage Split
+Live document state is maintained synchronously in-memory on the server for correctness and mirrored to Redis on every keystroke. Every 10 operations, a background flush commits the document to MongoDB. If Redis or Docker is not active locally, CollabAI seamlessly engages a resilient in-memory store for sessions and hot path caching while continuing to persist to MongoDB.
 
-### 4. Authentication — JWT with Redis-backed refresh tokens
-Short-lived access tokens (15 minutes) authenticate both REST endpoints and WebSocket connections. Refresh tokens (7 days) are stored in Redis, so logout invalidates a session instantly — no waiting for a token to expire, no per-request database lookup for revocation checks.
+### 3. Authentication & Instant Session Revocation
+REST endpoints and Socket.IO handshakes are protected by 15-minute JWT access tokens. Refresh tokens (7-day validity) are stored in the server session cache, enabling instantaneous token revocation upon logout without database queries or waiting for expiration.
 
-### 5. AI Conflict Mediator (Gemini API)
-OT guarantees a document stays *structurally* valid when edits conflict — it has no understanding of *meaning*. Two users typing the same sentence differently, or duplicating content, is something OT will apply correctly but can't recognize as redundant.
+### 4. AI Writing Assistant & Conflict Mediation
+- **Typo & Style Streaming**: Emits `request-suggestion` to Gemini 2.0 Flash; chunks stream via `suggestion-chunk` and can be accepted with one click (which emits a calculated OT diff to keep all collaborators in sync).
+- **Conflict Mediator**: Detects when two distinct users edit overlapping text regions within 4 seconds. Gemini analyzes the collision snippet and emits a `conflict-suggestion` event with a merged suggestion.
 
-This project adds a lightweight AI layer on top: when the server detects that two different users just edited overlapping or nearby text within a few seconds of each other, it sends that region to Gemini and asks whether it looks like a real semantic conflict. If so, both users see a dismissible suggestion with a clean merge — never an automatic edit. This check is fire-and-forget and never blocks the real-time sync path.
+---
 
-A separate, simpler suggestion layer also offers typo/garbled-text correction after a pause in typing, independent of the OT and conflict-detection systems.
-
-## Bugs fixed along the way (and why they mattered)
-
-- **Duplicate self-echo**: broadcasting operations to the whole room (including the sender) caused every local edit to apply twice. Fixed by separating `operation` (broadcast to others) from `operation-ack` (confirmation to the sender).
-- **Redis race condition**: an early version read live document state from Redis on every keystroke, creating a window where two fast concurrent edits could read the same stale snapshot and silently overwrite each other. Fixed by keeping the authoritative document state synchronous and in-memory, with Redis/Mongo writes happening asynchronously behind it.
-- **Single-character diff limitation**: the original diffing logic assumed exactly one character changed per keystroke, which broke on paste, multi-character replace, or fast typing — silently corrupting the shared document. Rewrote the diff to use a proper common-prefix/common-suffix comparison supporting operations of any length.
-- **Stale socket rooms after reconnect**: clients only joined a document room once, on initial page load — a dropped and reconnected socket would silently stop receiving updates. Fixed by re-joining on every `connect` event, not just the first.
-
-## Tech stack
-
-Node.js, Express, Socket.IO, Redis, MongoDB (Mongoose), JWT (jsonwebtoken), Google Gemini API, vanilla JS frontend.
-
-## Setup
+## Getting Started
 
 ### Prerequisites
-- Node.js
-- Docker Desktop (for Redis + MongoDB)
-- A Gemini API key ([aistudio.google.com](https://aistudio.google.com/apikey))
+- [Node.js](https://nodejs.org/) (v18 or higher recommended; tested on v22.18.0)
+- [MongoDB](https://www.mongodb.com/) (running locally on port `27017` or via Docker)
+- [Docker Desktop](https://www.docker.com/) (Optional: for containerized Redis and MongoDB)
+- Google Gemini API key (Optional: get a free key from [Google AI Studio](https://aistudio.google.com/apikey))
 
-### Install
+### 1. Installation
 ```bash
+git clone <repository-url>
+cd collabai
 npm install
 ```
 
-### Configure environment
-Create a `.env` file in the project root:
-```
+### 2. Environment Configuration
+Create a `.env` file in the root directory (or copy from `.env.example`):
+```env
+PORT=3000
+ACCESS_SECRET=your-random-access-secret-key
+REFRESH_SECRET=your-random-refresh-secret-key
 GEMINI_API_KEY=your-gemini-api-key
-ACCESS_SECRET=a-long-random-string
-REFRESH_SECRET=a-different-long-random-string
+MONGO_URI=mongodb://127.0.0.1:27017/collabai
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
 ```
 
-### Start Redis and MongoDB
+*(Note: If `GEMINI_API_KEY` is omitted, real-time collaboration and OT editing continue to work 100% normally; the AI panel will simply prompt you to add a key.)*
+
+### 3. (Optional) Start Redis & MongoDB with Docker
 ```bash
 docker-compose up -d
 ```
+*(If you have MongoDB installed natively as a Windows/Linux service and do not run Redis, CollabAI will automatically use its built-in in-memory fallback for Redis and connect directly to your local MongoDB.)*
 
-### Run the server
+### 4. Run the Backend Server
 ```bash
-node server.js
+npm start
+```
+Or for auto-reloading development:
+```bash
+npm run dev
 ```
 
-### Use it
-1. Open `http://localhost:3000/login.html`, enter a name to get a session
-2. Open a second browser (or incognito window) with a different name to simulate a second user
-3. Edit the shared document from both — changes sync in real time
+The backend server is accessible at **`http://localhost:3000`**.
 
-## Known limitations
+---
 
-- The OT implementation is a from-scratch educational build, not a production-hardened library — it hasn't been tested against pathological edge cases the way something like ShareDB or Yjs has.
-- The AI conflict detector uses simple proximity/timing heuristics (same document region, within a few seconds), not a guaranteed conflict detector.
-- Single-document demo (`test-doc`) — no document creation/listing UI yet.
-- Gemini's free tier has rate limits; heavy concurrent usage would need a paid tier or additional backoff handling.
+### 5. Run the React + Vite Frontend
+The modular React frontend lives in `client/` and is styled with Tailwind CSS, Lucide React, and React Router:
 
-## What I'd build next
+```bash
+# From the root directory:
+npm run client
 
-- Multi-document support with a document list/creation UI
-- Presence indicators (show who's currently viewing/editing)
-- Rich text formatting (currently plain text only)
-- A proper test suite for the OT transform function covering concurrent multi-user edit sequences
+# Or directly in the client folder:
+cd client
+npm install
+npm run dev
+```
+
+Visit **`http://localhost:5173`** to access the React application. The Vite development server automatically proxies API and Socket.IO requests to the backend at `http://localhost:3000`.
+
+To build the React production bundle:
+```bash
+npm run client:build
+```
+
+---
+
+## Verifying Multi-User Collaboration
+
+1. Open `http://localhost:3000` in your primary browser.
+2. Click **Start Writing** (or sign in as **Alex Rivera**).
+3. Open a second browser window (or Incognito window) at `http://localhost:3000`.
+4. Switch collaborator profile to **Sarah Chen**.
+5. Open the same document (e.g. `test-doc` or any newly created document ID).
+6. Type in both windows simultaneously: keystrokes broadcast and converge instantly without page refreshes.
+
+---
+
+## Testing & Quality Assurance
+
+CollabAI includes an automated test suite verifying both unit-level OT transformations and live multi-client Socket.IO synchronization:
+
+```bash
+# Run both unit and integration tests
+npm test
+
+# Run OT transform unit tests
+npm run test:ot
+
+# Run dual-client Socket.IO integration test
+npm run test:collab
+```
+
+---
+
+## Honest Technical Disclosures & Known Limitations
+
+1. **Plain-Text OT vs. Rich-Text ASTs**: CollabAI's OT algorithm operates strictly on positional character strings (`insert` and `delete`). True WYSIWYG rich-text styling (nested DOM trees / JSON schemas like ProseMirror or TipTap) requires tree-based transformation or CRDTs (e.g. Yjs / Automerge). Rich styling in this interface uses Markdown conventions and document layout styling to preserve 100% synchronization integrity without corrupting character offsets.
+2. **Access Control & Permissions**: Document sharing uses an open room ID identifier model. Any user possessing the link and a valid session can view and edit. Granular user access lists (viewer, commenter, editor roles) and password-protected rooms are reserved for future work.
+3. **Proximity-Based Conflict Trigger**: Semantic conflict detection uses a time-and-position heuristic (concurrent edits within 4000ms and 30 characters). Pathological conflicts occurring across widely separated lines or subtle semantic contradictions across paragraphs are not automatically flagged by this heuristic.
+4. **OT Edge Cases**: This OT algorithm was built from scratch for learning and demonstration. While tested against concurrent multi-user edits, it has not undergone formal fuzzing against extreme network reordering edge cases that industrial engines (like ShareDB or Google Wave OT) handle.
+
+---
+
+## Future Roadmap
+
+- [ ] Granular document access control (Owner, Editor, Viewer permissions).
+- [ ] Live collaborator cursor presence (visual colored carousels showing other users' cursor positions).
+- [ ] CRDT migration (evaluating Yjs / Automerge for peer-to-peer and offline-first support).
+- [ ] Document revision history and rollback snapshots.

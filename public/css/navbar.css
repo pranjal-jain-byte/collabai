@@ -1,0 +1,222 @@
+/* Navbar Styles - Adaptive for Landing, Dashboard, and Editor modes */
+
+.app-navbar {
+    height: 64px;
+    background-color: var(--surface-card);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-6);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+/* Brand Logo */
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-heading);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    cursor: pointer;
+    text-decoration: none !important;
+}
+
+.brand-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a73e8 0%, #7c3aed 100%);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 2px 6px rgba(26, 115, 232, 0.3);
+}
+
+.brand-text {
+    letter-spacing: -0.5px;
+}
+
+.brand-badge {
+    font-size: 10px;
+    text-transform: uppercase;
+    background-color: var(--color-primary-subtle);
+    color: var(--color-primary);
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+/* Nav Navigation Links */
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    list-style: none;
+}
+
+.nav-link {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: color var(--transition-fast);
+}
+
+.nav-link:hover {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+/* Editor Mode Top Bar (Google Docs style) */
+.editor-topbar {
+    height: 64px;
+    background-color: var(--surface-card);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-4);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.editor-title-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1;
+    min-width: 0;
+}
+
+.doc-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.doc-title-input {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
+    background: transparent;
+    max-width: 320px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.doc-title-input:hover {
+    border-color: var(--border-color);
+}
+
+.doc-title-input:focus {
+    border-color: var(--border-focus);
+    background-color: white;
+}
+
+/* Menu bar: File, Edit, View, Insert, Help */
+.menu-bar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-top: 2px;
+}
+
+.menu-item {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.menu-item:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.menu-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: white;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-dropdown);
+    border-radius: var(--radius-sm);
+    min-width: 180px;
+    padding: 6px 0;
+    z-index: 1000;
+}
+
+.menu-item.active .menu-dropdown {
+    display: block;
+}
+
+.menu-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.menu-action:hover {
+    background-color: var(--surface-hover);
+}
+
+.menu-action .shortcut {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.menu-divider {
+    height: 1px;
+    background-color: var(--border-color);
+    margin: 4px 0;
+}
+
+.editor-status-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.sync-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: default;
+}
+
+.sync-status.saving {
+    color: var(--color-primary);
+}
+
+.sync-status.saved {
+    color: #059669;
+}

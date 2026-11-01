@@ -1,0 +1,195 @@
+/* Document Editor Styles - Authentic Google Docs Experience */
+
+.editor-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    background-color: var(--surface-editor-bg);
+}
+
+/* Toolbar (Google Docs formatting bar) */
+.editor-toolbar {
+    background-color: var(--surface-toolbar);
+    border-bottom: 1px solid var(--border-color);
+    padding: 4px 16px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    white-space: nowrap;
+    user-select: none;
+    z-index: 50;
+    scrollbar-width: thin;
+}
+
+.editor-toolbar::-webkit-scrollbar {
+    height: 4px;
+}
+.editor-toolbar::-webkit-scrollbar-thumb {
+    background: #dadce0;
+    border-radius: 4px;
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background-color: var(--border-color);
+    margin: 0 4px;
+}
+
+.tool-btn {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 14px;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+    position: relative;
+}
+
+.tool-btn:hover {
+    background-color: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.tool-btn.active {
+    background-color: var(--color-primary-subtle);
+    color: var(--color-primary);
+}
+
+.tool-select {
+    height: 30px;
+    padding: 2px 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+}
+
+.tool-select:hover {
+    background-color: var(--surface-hover);
+}
+
+.tool-select:focus {
+    border-color: var(--border-focus);
+    background-color: white;
+}
+
+/* Document Viewport & Canvas Area */
+.editor-workspace {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+}
+
+.editor-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    padding: 32px 16px 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: text;
+}
+
+/* Authentic Google Docs Centered Page */
+.document-page {
+    width: 100%;
+    max-width: var(--doc-width);
+    min-height: var(--doc-min-height);
+    background: white;
+    box-shadow: var(--shadow-doc);
+    border: 1px solid #d3d3d3;
+    border-radius: 2px;
+    padding: 56px 64px;
+    position: relative;
+    cursor: text;
+    box-sizing: border-box;
+    transition: box-shadow var(--transition-fast);
+}
+
+.document-page:focus-within {
+    box-shadow: 0 3px 6px 0 rgba(60, 64, 67, 0.16), 0 8px 24px 6px rgba(60, 64, 67, 0.08);
+}
+
+/* Document Textarea / Content Surface */
+.document-canvas {
+    width: 100%;
+    min-height: calc(var(--doc-min-height) - 112px);
+    border: none;
+    outline: none;
+    resize: none;
+    font-family: var(--font-doc);
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--text-primary);
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    tab-size: 4;
+}
+
+/* Technical Protocol Banner */
+.doc-protocol-banner {
+    position: sticky;
+    bottom: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    z-index: 20;
+}
+
+.doc-protocol-banner strong {
+    color: var(--color-primary);
+}
+
+/* Floating Status Bar / Word Count */
+.editor-status-bar {
+    position: fixed;
+    bottom: 16px;
+    left: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    box-shadow: var(--shadow-sm);
+    z-index: 40;
+}
+
+/* Responsive Overrides */
+@media (max-width: 900px) {
+    .document-page {
+        max-width: 100%;
+        padding: 32px 24px;
+        min-height: auto;
+    }
+}

@@ -4,16 +4,17 @@ const { redisClient } = require('./db');
 const ACCESS_SECRET = process.env.ACCESS_SECRET || 'dev-access-secret';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'dev-refresh-secret';
 
-function generateAccessToken(userId) {
-    return jwt.sign({ userId }, ACCESS_SECRET, { expiresIn: '15m' });
+function generateAccessToken(userId, name) {
+    const payload = typeof userId === 'object' ? userId : { userId, name: name || undefined };
+    return jwt.sign(payload, ACCESS_SECRET, { expiresIn: '15m' });
 }
 
 function generateRefreshToken(userId) {
     return jwt.sign({ userId }, REFRESH_SECRET, { expiresIn: '7d' });
 }
 
-async function login(userId) {
-    const accessToken = generateAccessToken(userId);
+async function login(userId, name = null) {
+    const accessToken = generateAccessToken(userId, name);
     const refreshToken = generateRefreshToken(userId);
 
     await redisClient.set(`refresh:${userId}`, refreshToken, { EX: 7 * 24 * 60 * 60 });

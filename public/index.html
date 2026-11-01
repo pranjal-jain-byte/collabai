@@ -3,206 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CollabAI</title>
+    <title>CollabAI — Real-Time Collaborative Document Editor</title>
+    <meta name="description" content="Next-generation collaborative document editor powered by custom Operational Transformation, sub-50ms WebSocket synchronization, and Google Gemini AI conflict mediation.">
+    
+    <!-- Google Fonts: Inter, Outfit, and Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Design System Stylesheets -->
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/navbar.css">
+    <link rel="stylesheet" href="/css/landing.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="/css/editor.css">
+    <link rel="stylesheet" href="/css/ai-panel.css">
+    <link rel="stylesheet" href="/css/modal.css">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231a73e8'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'></path></svg>">
 </head>
 <body>
-    <textarea id="editor" rows="20" cols="60"></textarea>
+    <div id="app">
+        <!-- Persistent Top Navigation Bar -->
+        <header id="navbar-root"></header>
 
-    <div id="suggestion-box" style="margin-top:10px; padding:10px; border:1px solid #ccc; display:none; max-width:600px;">
-        <strong>Suggestion:</strong>
-        <p id="suggestion-text"></p>
-        <button id="accept-suggestion">Accept</button>
-        <button id="dismiss-suggestion">Dismiss</button>
+        <!-- Dynamic Main View Container (Landing, Dashboard, or Editor) -->
+        <main id="main-root"></main>
+
+        <!-- AI Assistant Drawer Anchor -->
+        <div id="ai-root"></div>
+
+        <!-- Semantic Conflict Mediator Anchor -->
+        <div id="conflict-root"></div>
+
+        <!-- Modals and Dialogs -->
+        <div id="modal-auth-root"></div>
+        <div id="modal-share-root"></div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container"></div>
     </div>
 
-    <div id="conflict-box" style="margin-top:10px; padding:10px; border:2px solid #e0a800; background:#fff8e1; display:none; max-width:600px;">
-        <strong>⚡ Possible edit conflict detected</strong>
-        <p id="conflict-original" style="color:#666; font-size:0.9em;"></p>
-        <p><strong>AI suggests:</strong> <span id="conflict-suggestion-text"></span></p>
-        <button id="dismiss-conflict">Dismiss</button>
-    </div>
-
+    <!-- Socket.IO Client Library (Served directly by Express backend) -->
     <script src="/socket.io/socket.io.js"></script>
-    <script>
-        const docId = 'test-doc';
-        const editor = document.getElementById('editor');
 
-        let previousValue = '';
-        let docVersion = 0;
-        let applyingRemoteOp = false;
-
-        // Paste a fresh refreshToken here ONCE (from your /login response). Lasts 7 days.
-        const REFRESH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ1c2VyMTIzIiwiaWF0IjoxNzgzNDAxOTc3LCJleHAiOjE3ODQwMDY3Nzd9.PHZYo9ig6-4lFVFzUo5AwOYDmxL5JufL8ctPxbOH3R0";
-
-        let ACCESS_TOKEN = null;
-        let socket;
-
-        function diffText(oldText, newText) {
-            let prefix = 0;
-            while (prefix < oldText.length && prefix < newText.length &&
-                   oldText[prefix] === newText[prefix]) {
-                prefix++;
-            }
-
-            let oldEnd = oldText.length;
-            let newEnd = newText.length;
-            while (oldEnd > prefix && newEnd > prefix &&
-                   oldText[oldEnd - 1] === newText[newEnd - 1]) {
-                oldEnd--;
-                newEnd--;
-            }
-
-            const deletedCount = oldEnd - prefix;
-            const insertedText = newText.slice(prefix, newEnd);
-
-            const ops = [];
-            if (deletedCount > 0) {
-                ops.push({ type: 'delete', position: prefix, count: deletedCount });
-            }
-            if (insertedText.length > 0) {
-                ops.push({ type: 'insert', position: prefix, text: insertedText });
-            }
-            return ops;
-        }
-
-        async function getAccessToken() {
-            const res = await fetch('/refresh', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refreshToken: REFRESH_TOKEN })
-            });
-            if (!res.ok) {
-                throw new Error('refresh failed — refresh token itself may be expired, re-login manually');
-            }
-            const data = await res.json();
-            return data.accessToken;
-        }
-
-        function attachSocketHandlers() {
-            socket.on('connect', () => {
-                socket.emit('join-doc', docId);
-            });
-
-            socket.on('connect_error', async (err) => {
-                console.error('Connection rejected:', err.message);
-                if (err.message === 'unauthorized') {
-                    console.log('Access token expired — refreshing...');
-                    try {
-                        ACCESS_TOKEN = await getAccessToken();
-                        socket.auth.token = ACCESS_TOKEN;
-                        socket.connect();
-                    } catch (e) {
-                        console.error('Could not refresh — please log in again:', e.message);
-                    }
-                }
-            });
-
-            socket.on('load-doc', (content) => {
-                editor.value = content;
-                previousValue = content;
-            });
-
-            socket.on('operation', ({ ops, version }) => {
-                const cursorPos = editor.selectionStart;
-
-                applyingRemoteOp = true;
-                let text = editor.value;
-                for (const op of ops) {
-                    if (op.type === 'insert') {
-                        text = text.slice(0, op.position) + op.text + text.slice(op.position);
-                    } else if (op.type === 'delete') {
-                        text = text.slice(0, op.position) + text.slice(op.position + op.count);
-                    }
-                }
-                editor.value = text;
-                applyingRemoteOp = false;
-
-                previousValue = editor.value;
-                docVersion = version;
-                editor.selectionStart = editor.selectionEnd = cursorPos;
-            });
-
-            socket.on('operation-ack', ({ version }) => {
-                docVersion = version;
-            });
-
-            // ---- AI suggestion events ----
-            const suggestionBox = document.getElementById('suggestion-box');
-            const suggestionTextEl = document.getElementById('suggestion-text');
-            let suggestionText = '';
-
-            socket.on('suggestion-chunk', (chunk) => {
-                suggestionText += chunk;
-                suggestionBox.style.display = 'block';
-                suggestionTextEl.innerText = suggestionText;
-            });
-
-            socket.on('suggestion-done', () => {});
-
-            socket.on('suggestion-error', ({ message }) => {
-                console.error(message);
-                suggestionBox.style.display = 'none';
-            });
-
-            document.getElementById('accept-suggestion').addEventListener('click', () => {
-                const oldValue = editor.value;
-                editor.value = suggestionText;
-                const ops = diffText(oldValue, suggestionText);
-                if (ops.length > 0) {
-                    socket.emit('operation', { docId, ops, baseVersion: docVersion });
-                }
-                previousValue = editor.value;
-                suggestionBox.style.display = 'none';
-                suggestionText = '';
-            });
-
-            document.getElementById('dismiss-suggestion').addEventListener('click', () => {
-                suggestionBox.style.display = 'none';
-                suggestionText = '';
-            });
-
-            // ---- Conflict mediator events ----
-            socket.on('conflict-suggestion', ({ original, suggestion }) => {
-                document.getElementById('conflict-box').style.display = 'block';
-                document.getElementById('conflict-original').innerText = `Original: "${original.trim()}"`;
-                document.getElementById('conflict-suggestion-text').innerText = suggestion;
-            });
-
-            document.getElementById('dismiss-conflict').addEventListener('click', () => {
-                document.getElementById('conflict-box').style.display = 'none';
-            });
-
-            // ---- Typing handler: OT sync + AI suggestion trigger ----
-            let typingTimer;
-            editor.addEventListener('input', () => {
-                if (applyingRemoteOp) return;
-
-                const newValue = editor.value;
-                const ops = diffText(previousValue, newValue);
-                previousValue = newValue;
-
-                if (ops.length > 0) {
-                    socket.emit('operation', { docId, ops, baseVersion: docVersion });
-                }
-
-                clearTimeout(typingTimer);
-                typingTimer = setTimeout(() => {
-                    socket.emit('request-suggestion', { text: editor.value });
-                }, 800);
-            });
-        }
-
-        async function connectSocket() {
-            try {
-                ACCESS_TOKEN = await getAccessToken();
-                socket = io({ auth: { token: ACCESS_TOKEN } });
-                attachSocketHandlers();
-            } catch (e) {
-                console.error('Initial connection failed:', e.message);
-            }
-        }
-
-        connectSocket();
-    </script>
+    <!-- CollabAI SPA Entrypoint -->
+    <script type="module" src="/js/app.js"></script>
 </body>
 </html>
