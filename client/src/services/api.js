@@ -198,6 +198,81 @@ class ApiService {
       return { status: 'offline' };
     }
   }
+
+  // Version History
+  async getVersions(docId) {
+    const data = await this.request(`/api/documents/${docId}/versions`);
+    return data.versions || [];
+  }
+
+  async getVersion(docId, versionId) {
+    const data = await this.request(`/api/documents/${docId}/versions/${versionId}`);
+    return data.version;
+  }
+
+  async createVersion(docId, payload = {}) {
+    return await this.request(`/api/documents/${docId}/versions`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async restoreVersion(docId, versionId, payload = {}) {
+    return await this.request(`/api/documents/${docId}/versions/${versionId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  // Action Items
+  async getActionItems(docId) {
+    const data = await this.request(`/api/documents/${docId}/actions`);
+    return data.actionItems || [];
+  }
+
+  async extractActionItems(docId) {
+    const data = await this.request(`/api/documents/${docId}/actions/extract`, {
+      method: 'POST',
+    });
+    return data.actionItems || [];
+  }
+
+  async createActionItem(docId, payload) {
+    const data = await this.request(`/api/documents/${docId}/actions`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return data.actionItem;
+  }
+
+  async updateActionItem(docId, actionId, payload) {
+    const data = await this.request(`/api/documents/${docId}/actions/${actionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return data.actionItem;
+  }
+
+  async deleteActionItem(docId, actionId) {
+    return await this.request(`/api/documents/${docId}/actions/${actionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // AI Review & Document Q&A
+  async reviewDocument(docId, payload = {}) {
+    return await this.request(`/api/documents/${docId}/ai/review`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async askDocument(docId, payload) {
+    return await this.request(`/api/documents/${docId}/ai/ask`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 export const api = new ApiService();

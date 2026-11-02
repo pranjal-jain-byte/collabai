@@ -15,7 +15,12 @@ import {
   HelpCircle,
   Undo2,
   Redo2,
-  Plus
+  Plus,
+  PanelLeft,
+  FileSearch,
+  MessageSquare,
+  History,
+  ListTodo
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.jsx';
 import ConnectionStatus from './ConnectionStatus.jsx';
@@ -33,7 +38,12 @@ export default function Navbar({
   onUndo,
   onRedo,
   onExportTxt,
-  onExportMd
+  onExportMd,
+  onToggleSidebar,
+  isSidebarOpen,
+  activeRightTab,
+  isRightPanelOpen,
+  onOpenRightTab
 }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -46,15 +56,27 @@ export default function Navbar({
 
   if (mode === 'editor') {
     return (
-      <header className="h-16 bg-white border-b border-gray-200 px-4 flex items-center justify-between sticky top-0 z-50 select-none">
-        {/* Left: Brand + Title + Menus */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+      <header className="h-14 bg-white border-b border-gray-200 px-3 flex items-center justify-between sticky top-0 z-40 select-none">
+        {/* Left: Sidebar Toggle + Brand + Title + Menus */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                isSidebarOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+              }`}
+              title={isSidebarOpen ? 'Close sidebar' : 'Open documents sidebar'}
+            >
+              <PanelLeft className="w-4 h-4" />
+            </button>
+          )}
+
           <Link 
             to="/dashboard" 
-            className="w-10 h-10 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-sm hover:opacity-90 transition-opacity flex-shrink-0"
+            className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-xs hover:opacity-90 transition-opacity shrink-0"
             title="Return to Documents"
           >
-            <FileText className="w-5 h-5" />
+            <FileText className="w-4 h-4" />
           </Link>
 
           <div className="flex flex-col min-w-0">
@@ -63,43 +85,43 @@ export default function Navbar({
               type="text" 
               value={title || ''}
               onChange={(e) => onTitleChange && onTitleChange(e.target.value)}
-              className="text-lg font-semibold text-gray-900 bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white rounded px-2 py-0.5 outline-none max-w-sm sm:max-w-md truncate transition-colors"
+              className="text-sm font-semibold text-gray-900 bg-transparent border border-transparent hover:border-gray-300 focus:border-indigo-500 focus:bg-white rounded px-1.5 py-0.5 outline-none max-w-xs sm:max-w-sm truncate transition-colors"
               placeholder="Untitled Document"
               title="Click to rename"
             />
 
-            {/* Menu Bar: File, Edit, AI Assist, Help */}
-            <div className="flex items-center gap-1 text-xs text-gray-600">
+            {/* Menu Bar: File, Edit, Help */}
+            <div className="flex items-center gap-1 text-[11px] text-gray-500">
               {/* File Menu */}
               <div className="relative">
                 <button 
                   onClick={() => setActiveMenu(activeMenu === 'file' ? null : 'file')}
-                  className="px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                  className="px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   File
                 </button>
                 {activeMenu === 'file' && (
                   <div 
-                    className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50"
+                    className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 text-xs"
                     onMouseLeave={() => setActiveMenu(null)}
                   >
                     <button 
                       onClick={() => { setActiveMenu(null); navigate('/dashboard'); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-100 flex items-center justify-between"
+                      className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center justify-between"
                     >
                       <span>New Document</span>
                       <Plus className="w-3.5 h-3.5 text-gray-400" />
                     </button>
                     <button 
                       onClick={() => { setActiveMenu(null); onExportTxt && onExportTxt(); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-100 flex items-center justify-between"
+                      className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center justify-between"
                     >
                       <span>Export as Plain Text</span>
                       <Download className="w-3.5 h-3.5 text-gray-400" />
                     </button>
                     <button 
                       onClick={() => { setActiveMenu(null); onExportMd && onExportMd(); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-100 flex items-center justify-between"
+                      className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center justify-between"
                     >
                       <span>Export as Markdown</span>
                       <Download className="w-3.5 h-3.5 text-gray-400" />
@@ -107,7 +129,7 @@ export default function Navbar({
                     <div className="h-px bg-gray-200 my-1"></div>
                     <button 
                       onClick={() => { setActiveMenu(null); window.print(); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-100 flex items-center justify-between"
+                      className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center justify-between"
                     >
                       <span>Print Document</span>
                       <Printer className="w-3.5 h-3.5 text-gray-400" />
@@ -120,25 +142,25 @@ export default function Navbar({
               <div className="relative">
                 <button 
                   onClick={() => setActiveMenu(activeMenu === 'edit' ? null : 'edit')}
-                  className="px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                  className="px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   Edit
                 </button>
                 {activeMenu === 'edit' && (
                   <div 
-                    className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50"
+                    className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 text-xs"
                     onMouseLeave={() => setActiveMenu(null)}
                   >
                     <button 
                       onClick={() => { setActiveMenu(null); onUndo && onUndo(); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-100 flex items-center justify-between"
+                      className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center justify-between"
                     >
                       <span>Undo</span>
                       <span className="text-gray-400 text-[10px]">Ctrl+Z</span>
                     </button>
                     <button 
                       onClick={() => { setActiveMenu(null); onRedo && onRedo(); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-100 flex items-center justify-between"
+                      className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center justify-between"
                     >
                       <span>Redo</span>
                       <span className="text-gray-400 text-[10px]">Ctrl+Y</span>
@@ -151,26 +173,18 @@ export default function Navbar({
               <div className="relative">
                 <button 
                   onClick={() => setActiveMenu(activeMenu === 'help' ? null : 'help')}
-                  className="px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                  className="px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   Help
                 </button>
                 {activeMenu === 'help' && (
                   <div 
-                    className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50"
+                    className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg py-1.5 z-50 text-xs"
                     onMouseLeave={() => setActiveMenu(null)}
                   >
-                    <div className="px-3 py-2 text-[11px] text-gray-500 border-b border-gray-100">
-                      <strong>Operational Transformation:</strong> Real-time keystroke diffs transformed against server history.
+                    <div className="px-3 py-1.5 text-[11px] text-gray-500 border-b border-gray-100">
+                      <strong>CollabAI:</strong> Real-time Operational Transformation with sub-second AI review and presence synchronization.
                     </div>
-                    <a 
-                      href="https://github.com" 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="block px-3 py-1.5 text-xs text-blue-600 hover:bg-gray-100"
-                    >
-                      Architecture Documentation
-                    </a>
                   </div>
                 )}
               </div>
@@ -178,19 +192,19 @@ export default function Navbar({
           </div>
         </div>
 
-        {/* Right: Cloud Sync + Live OT + Share + AI + User */}
-        <div className="flex items-center gap-3">
+        {/* Right: Workspace Feature Tabs + Live OT + Share + User */}
+        <div className="flex items-center gap-2">
           {/* Cloud Save Status */}
-          <div className="hidden md:flex items-center gap-1.5 text-xs text-gray-500">
+          <div className="hidden lg:flex items-center gap-1.5 text-xs text-gray-500 mr-1">
             {saveStatus === 'saving' ? (
               <>
-                <Cloud className="w-4 h-4 text-blue-500 animate-pulse" />
-                <span className="text-blue-600">Syncing...</span>
+                <Cloud className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+                <span className="text-indigo-600 text-[11px]">Syncing...</span>
               </>
             ) : (
               <>
-                <Check className="w-4 h-4 text-emerald-600" />
-                <span className="text-emerald-700">Saved</span>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-emerald-700 text-[11px]">Saved</span>
               </>
             )}
           </div>
@@ -200,11 +214,11 @@ export default function Navbar({
 
           {/* Active Collaborators Avatars */}
           {collaborators && collaborators.length > 0 && (
-            <div className="flex items-center -space-x-2 overflow-hidden px-1 py-0.5">
+            <div className="flex items-center -space-x-1.5 overflow-hidden px-1">
               {collaborators.map((c) => (
                 <div
                   key={c.socketId || c.userId}
-                  className="w-7 h-7 rounded-full text-white font-semibold flex items-center justify-center text-[10px] shadow-sm ring-2 ring-white cursor-default transition-transform hover:scale-110 hover:z-20"
+                  className="w-6 h-6 rounded-full text-white font-bold flex items-center justify-center text-[10px] shadow-xs ring-2 ring-white transition-transform hover:scale-110 hover:z-20 cursor-default"
                   style={{ backgroundColor: c.color || '#1a73e8' }}
                   title={`${c.name || c.userId} (Active Collaborator)`}
                 >
@@ -214,37 +228,81 @@ export default function Navbar({
             </div>
           )}
 
+          {/* Workspace Feature Quick Buttons */}
+          {onOpenRightTab && (
+            <div className="hidden md:flex items-center gap-1 border-l border-gray-200 pl-2">
+              <button
+                onClick={() => onOpenRightTab('review')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                  isRightPanelOpen && activeRightTab === 'review'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
+                }`}
+                title="AI Document Review Mode"
+              >
+                <FileSearch className="w-3.5 h-3.5" />
+                <span>Review</span>
+              </button>
+
+              <button
+                onClick={() => onOpenRightTab('ask')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                  isRightPanelOpen && activeRightTab === 'ask'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                }`}
+                title="Ask Your Document"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Ask Doc</span>
+              </button>
+
+              <button
+                onClick={() => onOpenRightTab('actions')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                  isRightPanelOpen && activeRightTab === 'actions'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                }`}
+                title="Action Items"
+              >
+                <ListTodo className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Actions</span>
+              </button>
+
+              <button
+                onClick={() => onOpenRightTab('history')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                  isRightPanelOpen && activeRightTab === 'history'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                }`}
+                title="Version History & Revisions"
+              >
+                <History className="w-3.5 h-3.5 text-gray-600" />
+                <span>History</span>
+              </button>
+            </div>
+          )}
+
           {/* Share Button */}
           <button 
             onClick={onShareClick}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md transition-colors cursor-pointer"
           >
-            <Share2 className="w-4 h-4 text-gray-600" />
+            <Share2 className="w-3.5 h-3.5 text-gray-600" />
             <span className="hidden sm:inline">Share</span>
-          </button>
-
-          {/* Gemini AI Toggle */}
-          <button 
-            onClick={onAiToggle}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all shadow-sm ${
-              isAiOpen 
-                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white' 
-                : 'bg-white hover:bg-purple-50 text-purple-700 border border-purple-200'
-            }`}
-          >
-            <Sparkles className="w-4 h-4" />
-            <span className="hidden sm:inline">AI Assistant</span>
           </button>
 
           {/* User Profile Avatar */}
           {user && (
             <div 
-              className="w-8 h-8 rounded-full text-white font-semibold flex items-center justify-center text-xs shadow-sm ring-2 ring-white cursor-pointer"
-              style={{ backgroundColor: user.color }}
-              title={`${user.name} (${user.id})`}
+              className="w-7 h-7 rounded-full text-white font-bold flex items-center justify-center text-xs shadow-xs ring-2 ring-white cursor-pointer"
+              style={{ backgroundColor: user.color || '#4f46e5' }}
+              title={`${user.name} (${user.id}) — Click to log out`}
               onClick={handleLogout}
             >
-              {user.name.charAt(0).toUpperCase()}
+              {(user.name || user.id).charAt(0).toUpperCase()}
             </div>
           )}
         </div>

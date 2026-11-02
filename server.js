@@ -4,9 +4,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { transform, applyOperation, transformCursor } = require('./ot');
-const { redisClient, Document, isRedisAvailable } = require('./db');
+const { redisClient, Document, Revision, ActionItem, isRedisAvailable } = require('./db');
 const { login, refresh, logout, authMiddleware } = require('./auth');
-const { getSuggestion, checkForConflict } = require('./suggestions');
+const { getSuggestion, checkForConflict, reviewDocument, askDocument, extractActionItems } = require('./suggestions');
 
 const ALLOWED_ORIGINS = new Set([
     'http://localhost:5173',
@@ -220,6 +220,26 @@ function queueSave(docId, newContent, version, title) {
                 );
                 opCounters[docId] = 0;
                 console.log(`[CollabAI Storage] Checkpointed ${docId} (v${version}) to MongoDB`);
+
+                // Create durable Revision snapshot
+                try {
+                    const existingRev = await Revision.findOne({ docId, version });
+                    if (!existingRev) {
+                        await Revision.create({
+                            docId,
+                            version,
+                            content: newContent,
+                            title: title || docTitles[docId] || 'Untitled Document',
+                            author: 'system',
+                            authorName: 'Collaborative Edit',
+                            label: `Version ${version} Checkpoint`,
+                            summary: `Automatic snapshot after concurrent editing session (${newContent.length} chars)`,
+                            createdAt: new Date()
+                        });
+                    }
+                } catch (revErr) {
+                    console.warn(`[CollabAI Revision] Snapshot note:`, revErr.message);
+                }
             }
         } catch (err) {
             console.error(`[CollabAI Storage] Failed to persist ${docId} (v${version}):`, err.message);
@@ -441,6 +461,268 @@ app.patch('/api/documents/:docId/title', async (req, res) => {
 
         res.json({ docId, title: updatedTitle });
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ---- Feature Four: Version History Endpoints ----
+app.get('/api/documents/:docId/versions', async (req, res) => {
+    try {
+        const { docId } = req.params;
+        const docInfo = await loadDocument(docId);
+        let revisions = await Revision.find({ docId }).sort({ version: -1, createdAt: -1 }).lean();
+
+        // If no revisions exist yet, create baseline snapshot for current state
+        if (revisions.length === 0) {
+            const initialRev = await Revision.create({
+                docId,
+                version: docInfo.version,
+                content: docInfo.content,
+                title: docInfo.title,
+                author: 'system',
+                authorName: 'Initial Snapshot',
+                label: 'Current Working Document',
+                summary: `Initial document baseline (${docInfo.content.length} characters)`
+            });
+            revisions = [initialRev.toObject()];
+        }
+        res.json({ versions: revisions });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch version history: ' + err.message });
+    }
+});
+
+app.get('/api/documents/:docId/versions/:versionId', async (req, res) => {
+    try {
+        const { docId, versionId } = req.params;
+        const revision = await Revision.findOne({ docId, _id: versionId }).lean();
+        if (!revision) {
+            return res.status(404).json({ error: 'Revision not found' });
+        }
+        res.json({ version: revision });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/documents/:docId/versions', async (req, res) => {
+    try {
+        const { docId } = req.params;
+        const { label, summary, author, authorName } = req.body || {};
+        const docInfo = await loadDocument(docId);
+        const revision = await Revision.create({
+            docId,
+            version: docInfo.version,
+            content: docInfo.content,
+            title: docInfo.title,
+            author: author || 'manual',
+            authorName: authorName || 'Collaborator',
+            label: label || `Milestone (v${docInfo.version})`,
+            summary: summary || `Manual snapshot checkpoint at version ${docInfo.version}`
+        });
+        res.status(201).json({ revision });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/documents/:docId/versions/:versionId/restore', async (req, res) => {
+    try {
+        const { docId, versionId } = req.params;
+        const targetRev = await Revision.findOne({ docId, _id: versionId });
+        if (!targetRev) {
+            return res.status(404).json({ error: 'Revision not found' });
+        }
+
+        const currentInfo = await loadDocument(docId);
+        const targetContent = targetRev.content || '';
+        const currentContent = currentInfo.content || '';
+
+        // Formulate replacement operations for OT transition
+        const ops = [];
+        if (currentContent.length > 0) {
+            ops.push({ type: 'delete', position: 0, count: currentContent.length, text: currentContent });
+        }
+        if (targetContent.length > 0) {
+            ops.push({ type: 'insert', position: 0, text: targetContent });
+        }
+
+        const history = opHistory[docId] || [];
+        for (const op of ops) {
+            history.push(op);
+        }
+        opHistory[docId] = history;
+        docState[docId] = targetContent;
+        docVersion[docId] = history.length;
+        const newVersion = docVersion[docId];
+
+        // Broadcast to all active clients in this room
+        io.to(docId).emit('operation', { ops, version: newVersion });
+
+        // Persist immediately and record a new restored revision milestone
+        await queueSave(docId, targetContent, newVersion, currentInfo.title);
+        const restoredRev = await Revision.create({
+            docId,
+            version: newVersion,
+            content: targetContent,
+            title: currentInfo.title,
+            author: req.body?.author || 'system',
+            authorName: req.body?.authorName || 'Collaborator',
+            label: `Restored to v${targetRev.version}`,
+            summary: `Restored content from ${targetRev.label} (v${targetRev.version}) as a new revision`,
+            createdAt: new Date()
+        });
+
+        res.json({
+            success: true,
+            version: newVersion,
+            content: targetContent,
+            restoredRevision: restoredRev
+        });
+    } catch (err) {
+        console.error('[CollabAI Restore] Error restoring version:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ---- Feature Five: Action Items Endpoints ----
+app.post('/api/documents/:docId/actions/extract', async (req, res) => {
+    try {
+        const { docId } = req.params;
+        const docInfo = await loadDocument(docId);
+        if (!docInfo.content || docInfo.content.trim().length === 0) {
+            return res.json({ actionItems: [], message: 'Document is empty. Enter notes or meeting content first.' });
+        }
+
+        const { actionItems } = await extractActionItems({ fullText: docInfo.content });
+
+        const saved = [];
+        for (const item of (actionItems || [])) {
+            const doc = await ActionItem.create({
+                docId,
+                task: item.task,
+                assignee: item.assignee || '',
+                dueDate: item.dueDate || '',
+                dependencies: Array.isArray(item.dependencies) ? item.dependencies : [],
+                openQuestions: Array.isArray(item.openQuestions) ? item.openQuestions : [],
+                status: 'pending',
+                createdBy: req.body?.author || 'AI Extractor'
+            });
+            saved.push(doc);
+        }
+
+        res.json({ actionItems: saved });
+    } catch (err) {
+        console.error('[CollabAI Action Items] Extraction error:', err.message);
+        res.status(500).json({ error: 'Failed to extract action items: ' + err.message });
+    }
+});
+
+app.get('/api/documents/:docId/actions', async (req, res) => {
+    try {
+        const { docId } = req.params;
+        const items = await ActionItem.find({ docId }).sort({ createdAt: -1 }).lean();
+        res.json({ actionItems: items });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/documents/:docId/actions', async (req, res) => {
+    try {
+        const { docId } = req.params;
+        const { task, assignee, dueDate, dependencies, openQuestions } = req.body || {};
+        if (!task || !task.trim()) {
+            return res.status(400).json({ error: 'Task description is required' });
+        }
+        const created = await ActionItem.create({
+            docId,
+            task: task.trim(),
+            assignee: assignee ? assignee.trim() : '',
+            dueDate: dueDate ? dueDate.trim() : '',
+            dependencies: Array.isArray(dependencies) ? dependencies : [],
+            openQuestions: Array.isArray(openQuestions) ? openQuestions : [],
+            status: 'pending',
+            createdBy: req.body?.author || 'manual'
+        });
+        res.status(201).json({ actionItem: created });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.patch('/api/documents/:docId/actions/:actionId', async (req, res) => {
+    try {
+        const { docId, actionId } = req.params;
+        const update = {};
+        if (req.body.status) update.status = req.body.status;
+        if (req.body.task) update.task = req.body.task;
+        if (req.body.assignee !== undefined) update.assignee = req.body.assignee;
+        if (req.body.dueDate !== undefined) update.dueDate = req.body.dueDate;
+        update.updatedAt = new Date();
+
+        const updated = await ActionItem.findOneAndUpdate(
+            { _id: actionId, docId },
+            update,
+            { new: true }
+        );
+        if (!updated) {
+            return res.status(404).json({ error: 'Action item not found' });
+        }
+        res.json({ actionItem: updated });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/documents/:docId/actions/:actionId', async (req, res) => {
+    try {
+        const { docId, actionId } = req.params;
+        await ActionItem.deleteOne({ _id: actionId, docId });
+        res.json({ message: 'Action item removed', actionId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ---- Feature Two & Three: AI Review & Document Q&A Endpoints ----
+app.post('/api/documents/:docId/ai/review', async (req, res) => {
+    try {
+        const { docId } = req.params;
+        const { targetText, categoryFilter } = req.body || {};
+        const docInfo = await loadDocument(docId);
+        const fullText = docInfo.content || '';
+
+        const result = await reviewDocument({
+            fullText,
+            targetText,
+            categoryFilter: categoryFilter || 'all'
+        });
+        res.json(result);
+    } catch (err) {
+        console.error('[CollabAI AI Review] Endpoint error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/documents/:docId/ai/ask', async (req, res) => {
+    try {
+        const { docId } = req.params;
+        const { query, history } = req.body || {};
+        if (!query || !query.trim()) {
+            return res.status(400).json({ error: 'Query is required' });
+        }
+        const docInfo = await loadDocument(docId);
+        const fullText = docInfo.content || '';
+
+        const result = await askDocument({
+            query,
+            fullText,
+            history: Array.isArray(history) ? history : []
+        });
+        res.json(result);
+    } catch (err) {
+        console.error('[CollabAI Ask Doc] Endpoint error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });

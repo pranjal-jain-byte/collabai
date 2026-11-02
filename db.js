@@ -113,6 +113,43 @@ const documentSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 });
 
-const Document = mongoose.model('Document', documentSchema);
+const revisionSchema = new mongoose.Schema({
+    docId: { type: String, required: true, index: true },
+    version: { type: Number, required: true },
+    content: { type: String, default: '' },
+    title: { type: String, default: 'Untitled Document' },
+    author: { type: String, default: 'anonymous' },
+    authorName: { type: String, default: 'Collaborator' },
+    label: { type: String, default: 'Auto-saved revision' },
+    summary: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now, index: true }
+});
 
-module.exports = { redisClient, Document, isRedisAvailable: () => isRedisConnected };
+revisionSchema.index({ docId: 1, version: -1 });
+
+const actionItemSchema = new mongoose.Schema({
+    docId: { type: String, required: true, index: true },
+    task: { type: String, required: true },
+    assignee: { type: String, default: '' },
+    dueDate: { type: String, default: '' },
+    dependencies: { type: [String], default: [] },
+    openQuestions: { type: [String], default: [] },
+    status: { type: String, enum: ['pending', 'in_progress', 'completed'], default: 'pending' },
+    createdBy: { type: String, default: 'anonymous' },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+});
+
+actionItemSchema.index({ docId: 1, createdAt: -1 });
+
+const Document = mongoose.model('Document', documentSchema);
+const Revision = mongoose.model('Revision', revisionSchema);
+const ActionItem = mongoose.model('ActionItem', actionItemSchema);
+
+module.exports = {
+    redisClient,
+    Document,
+    Revision,
+    ActionItem,
+    isRedisAvailable: () => isRedisConnected
+};

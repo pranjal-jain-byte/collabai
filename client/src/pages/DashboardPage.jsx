@@ -161,7 +161,7 @@ export default function DashboardPage() {
           <button
             onClick={() => handleCreateDocument('Untitled Document', '', 'btn-blank')}
             disabled={isCreating}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg shadow-sm transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
           >
             {isCreating && creatingTemplateId === 'btn-blank' ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
@@ -174,32 +174,32 @@ export default function DashboardPage() {
 
         {/* Template Gallery */}
         <section className="mb-12">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
-            Start a New Document
+          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
+            Workspace Templates
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {TEMPLATES.map((tmpl) => (
               <div
                 key={tmpl.id}
                 onClick={() => !isCreating && handleCreateDocument(tmpl.name, tmpl.content, tmpl.id)}
-                className={`bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-400 hover:shadow-md transition-all flex flex-col justify-between group ${
+                className={`bg-white border border-gray-200/80 rounded-xl p-5 hover:border-indigo-400 hover:shadow-md transition-all flex flex-col justify-between group ${
                   isCreating ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
                 }`}
               >
-                <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                   {isCreating && creatingTemplateId === tmpl.id ? (
-                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <RefreshCw className="w-4 h-4 animate-spin" />
                   ) : tmpl.id === 'blank' ? (
-                    <Plus className="w-5 h-5" />
+                    <Plus className="w-4 h-4" />
                   ) : (
-                    <FileText className="w-5 h-5" />
+                    <FileText className="w-4 h-4" />
                   )}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors">
+                  <h3 className="font-semibold text-gray-900 text-sm group-hover:text-indigo-600 transition-colors">
                     {tmpl.name}
                   </h3>
-                  <p className="text-xs text-gray-500 mt-1">{tmpl.desc}</p>
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">{tmpl.desc}</p>
                 </div>
               </div>
             ))}
@@ -216,7 +216,7 @@ export default function DashboardPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search documents by title or ID..."
-                className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                className="w-full pl-10 pr-4 py-2 text-xs bg-white border border-gray-200 rounded-xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-2xs"
               />
             </div>
             
@@ -227,9 +227,9 @@ export default function DashboardPage() {
               <button
                 onClick={fetchDocuments}
                 title="Refresh document list"
-                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
               </button>
             </div>
           </div>

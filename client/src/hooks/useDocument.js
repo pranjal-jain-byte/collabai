@@ -662,6 +662,18 @@ export function useDocument(docId) {
     }
   }, [pushUndoSnapshot, dispatchLocalOps]);
 
+  // Apply replacement of targeted substring with stale verification
+  const applySubText = useCallback((originalText, suggestedText) => {
+    const cur = contentRef.current || '';
+    if (!cur.includes(originalText)) {
+      return false; // Stale edit detected
+    }
+    const pos = cur.indexOf(originalText);
+    const nextText = cur.slice(0, pos) + suggestedText + cur.slice(pos + originalText.length);
+    applyFullText(nextText);
+    return true;
+  }, [applyFullText]);
+
   // 10. Real-time cursor & selection change handler
   const handleCursorActivity = useCallback(() => {
     syncActiveFormatting();
@@ -691,6 +703,7 @@ export function useDocument(docId) {
     handleTitleChange,
     handleCursorActivity,
     applyFullText,
+    applySubText,
     undo,
     redo,
     canUndo,

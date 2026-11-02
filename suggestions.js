@@ -161,4 +161,243 @@ Does this look like a real semantic conflict — duplicated words/sentences, or 
     }
 }
 
-module.exports = { getSuggestion, checkForConflict };
+// ---- Feature Two: AI Document Review Mode ----
+async function reviewDocument({ fullText, targetText, categoryFilter = 'all' }) {
+    const textToReview = (targetText && targetText.trim().length > 0) ? targetText : fullText;
+    if (!textToReview || textToReview.trim().length === 0) {
+        return { suggestions: [] };
+    }
+
+    if (!groqClient && !geminiModel) {
+        throw new Error('AI service is not configured. Please set GROQ_API_KEY in the server environment.');
+    }
+
+    const prompt = `You are a world-class editor and technical document reviewer.
+Analyze the following text and identify specific, actionable improvement suggestions across these 7 categories:
+1. Clarity (confusing phrasing, ambiguous wording)
+2. Grammar (spelling, typos, punctuation, syntax errors)
+3. Structure (poor transition, missing headings, flow issues)
+4. Contradictions (mutually conflicting or inconsistent claims)
+5. Missing information (unstated assumptions, missing prerequisites or details)
+6. Unsupported claims (assertions made without rationale or evidence)
+7. Redundancy (repeated ideas, unnecessary filler)
+
+${categoryFilter && categoryFilter !== 'all' ? `FILTER: Focus primarily on the category "${categoryFilter}".` : ''}
+
+CRITICAL RULES:
+- "originalText" MUST BE AN EXACT SUBSTRING appearing in the text, so it can be located and highlighted or safely replaced.
+- If suggesting a replacement, provide the clean "suggestedText". If the issue is missing information or an observation, "suggestedText" may be empty.
+- Keep "explanation" clear, concise, and constructive.
+
+TEXT TO REVIEW:
+"""
+${textToReview.slice(0, 8000)}
+"""
+
+Respond with ONLY valid JSON:
+{
+  "suggestions": [
+    {
+      "id": "s1",
+      "category": "Clarity",
+      "title": "Short issue title",
+      "originalText": "exact text snippet from document",
+      "suggestedText": "suggested replacement text",
+      "explanation": "why this change improves the document"
+    }
+  ]
+}`;
+
+    if (groqClient) {
+        try {
+            const completion = await groqClient.chat.completions.create({
+                model: groqModel,
+                messages: [
+                    { role: 'system', content: 'You are an expert document editor. Always output strictly valid JSON.' },
+                    { role: 'user', content: prompt }
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.2
+            });
+
+            const content = completion.choices[0]?.message?.content?.trim();
+            const parsed = JSON.parse(content);
+            return { suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [] };
+        } catch (err) {
+            console.warn('[CollabAI AI Review] Groq call note:', err.message);
+            if (!geminiModel) throw err;
+        }
+    }
+
+    if (geminiModel) {
+        try {
+            const result = await geminiModel.generateContent(prompt);
+            const rawText = result.response.text().trim();
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                return { suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [] };
+            }
+        } catch (err) {
+            console.error('[CollabAI AI Review] Gemini call failed:', err.message);
+            throw err;
+        }
+    }
+
+    return { suggestions: [] };
+}
+
+// ---- Feature Three: Ask Your Document (Document-Aware Q&A) ----
+async function askDocument({ query, fullText, history = [] }) {
+    if (!query || query.trim().length === 0) {
+        throw new Error('Query is required');
+    }
+
+    if (!groqClient && !geminiModel) {
+        throw new Error('AI service is not configured. Please set GROQ_API_KEY in the server environment.');
+    }
+
+    const docContext = (fullText && fullText.trim().length > 0)
+        ? fullText.slice(0, 12000)
+        : '[Empty document - no text written yet]';
+
+    const systemPrompt = `You are CollabAI's Document Assistant — an intelligent, document-aware collaborator.
+Your task is to answer user questions strictly based on the provided document context.
+- Ground your answers in the document text.
+- If the document does not contain the answer, state that clearly and suggest what might be needed.
+- Use clean Markdown formatting with bullet points or numbered lists where appropriate.
+- When referencing specific facts or decisions, cite the relevant section or quote the excerpt.
+- Be concise, accurate, and helpful.`;
+
+    const userPrompt = `DOCUMENT CONTEXT:
+"""
+${docContext}
+"""
+
+USER QUESTION:
+${query}`;
+
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        ...(Array.isArray(history) ? history.slice(-6).map(h => ({
+            role: h.role === 'user' ? 'user' : 'assistant',
+            content: String(h.content || '')
+        })) : []),
+        { role: 'user', content: userPrompt }
+    ];
+
+    if (groqClient) {
+        try {
+            const completion = await groqClient.chat.completions.create({
+                model: groqModel,
+                messages,
+                temperature: 0.3
+            });
+
+            const answer = completion.choices[0]?.message?.content?.trim() || '';
+            return { answer };
+        } catch (err) {
+            console.warn('[CollabAI Ask Doc] Groq call note:', err.message);
+            if (!geminiModel) throw err;
+        }
+    }
+
+    if (geminiModel) {
+        try {
+            const chatPrompt = `${systemPrompt}\n\n${userPrompt}`;
+            const result = await geminiModel.generateContent(chatPrompt);
+            const answer = result.response.text().trim();
+            return { answer };
+        } catch (err) {
+            console.error('[CollabAI Ask Doc] Gemini call failed:', err.message);
+            throw err;
+        }
+    }
+
+    return { answer: 'AI service could not process your question at this time.' };
+}
+
+// ---- Feature Five: Turn Documents into Actions (Extract Action Items) ----
+async function extractActionItems({ fullText }) {
+    if (!fullText || fullText.trim().length === 0) {
+        return { actionItems: [] };
+    }
+
+    if (!groqClient && !geminiModel) {
+        throw new Error('AI service is not configured. Please set GROQ_API_KEY in the server environment.');
+    }
+
+    const prompt = `You are an AI Technical Project Manager.
+Analyze the following document and extract concrete actionable tasks, along with explicitly mentioned responsible people, deadlines, dependencies, and open questions.
+
+CRITICAL EXTRACTION RULES:
+- "task": A clear, imperative action item (e.g. "Implement Redis persistence queue", "Configure DNS records").
+- "assignee": ONLY assign a person if EXPLICITLY mentioned in the document (e.g., "Sarah will...", "Assigned to Alex"). If not stated, return an empty string "". DO NOT INVENT PEOPLE.
+- "dueDate": ONLY assign a deadline if EXPLICITLY stated in the document (e.g., "by Friday", "Due Nov 15"). If not stated, return an empty string "". DO NOT INVENT DATES.
+- "dependencies": Any prerequisites or blocking tasks mentioned.
+- "openQuestions": Any unresolved questions, doubts, or ambiguities associated with this action.
+
+DOCUMENT TEXT:
+"""
+${fullText.slice(0, 10000)}
+"""
+
+Respond with ONLY valid JSON:
+{
+  "actionItems": [
+    {
+      "task": "Task description",
+      "assignee": "Name or empty string",
+      "dueDate": "Deadline or empty string",
+      "dependencies": ["dependency 1"],
+      "openQuestions": ["question 1"]
+    }
+  ]
+}`;
+
+    if (groqClient) {
+        try {
+            const completion = await groqClient.chat.completions.create({
+                model: groqModel,
+                messages: [
+                    { role: 'system', content: 'You are an expert project manager. Always output strictly valid JSON.' },
+                    { role: 'user', content: prompt }
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.2
+            });
+
+            const content = completion.choices[0]?.message?.content?.trim();
+            const parsed = JSON.parse(content);
+            return { actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems : [] };
+        } catch (err) {
+            console.warn('[CollabAI Extract Actions] Groq call note:', err.message);
+            if (!geminiModel) throw err;
+        }
+    }
+
+    if (geminiModel) {
+        try {
+            const result = await geminiModel.generateContent(prompt);
+            const rawText = result.response.text().trim();
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                return { actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems : [] };
+            }
+        } catch (err) {
+            console.error('[CollabAI Extract Actions] Gemini call failed:', err.message);
+            throw err;
+        }
+    }
+
+    return { actionItems: [] };
+}
+
+module.exports = {
+    getSuggestion,
+    checkForConflict,
+    reviewDocument,
+    askDocument,
+    extractActionItems
+};
