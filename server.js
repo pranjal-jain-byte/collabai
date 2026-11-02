@@ -392,26 +392,23 @@ app.post('/api/documents', async (req, res) => {
 app.get('/api/documents/:docId', async (req, res) => {
     try {
         const { docId } = req.params;
-        try {
-            const docInfo = await loadDocument(docId);
-            // Check if document was persisted in DB or created in memory
-            const existsInDb = await Document.exists({ docId });
-            if (!existsInDb && docInfo.content === '' && (opHistory[docId] || []).length === 0 && !docTitles[docId]) {
-                return res.status(404).json({ error: `Document '${docId}' not found` });
-            }
+        const existsInDb = await Document.exists({ docId });
+        const existsInMemory = docState[docId] !== undefined;
 
-            res.json({
-                docId,
-                title: docInfo.title || 'Untitled Document',
-                content: docInfo.content || '',
-                version: docInfo.version || 0,
-                updatedAt: new Date()
-            });
-        } catch (err) {
-            console.error('[CollabAI API] Error fetching document:', err.message);
-            res.status(500).json({ error: err.message });
+        if (!existsInDb && !existsInMemory) {
+            return res.status(404).json({ error: `Document '${docId}' not found` });
         }
+
+        const docInfo = await loadDocument(docId);
+        res.json({
+            docId,
+            title: docInfo.title || 'Untitled Document',
+            content: docInfo.content || '',
+            version: docInfo.version || 0,
+            updatedAt: new Date()
+        });
     } catch (err) {
+        console.error('[CollabAI API] Error fetching document:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -421,6 +418,8 @@ app.delete('/api/documents/:docId', async (req, res) => {
         const { docId } = req.params;
         try {
             await Document.deleteOne({ docId });
+            await Revision.deleteMany({ docId });
+            await ActionItem.deleteMany({ docId });
         } catch (dbErr) {
             console.warn('[CollabAI API] MongoDB delete warning:', dbErr.message);
         }
@@ -435,6 +434,9 @@ app.delete('/api/documents/:docId', async (req, res) => {
         delete recentEdits[docId];
         saveQueues.delete(docId);
         initPromises.delete(docId);
+
+        // Notify any open clients connected to this document
+        io.to(docId).emit('document-deleted', { docId });
 
         res.json({ message: 'Document deleted successfully', docId });
     } catch (err) {

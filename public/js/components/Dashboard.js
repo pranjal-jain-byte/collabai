@@ -117,7 +117,18 @@ export class Dashboard {
                             <div class="doc-card" data-doc-id="${doc.docId}">
                                 <div class="doc-card-header">
                                     <div class="doc-card-title">${this._escapeHtml(doc.title || 'Untitled Document')}</div>
-                                    <div style="color:var(--color-primary);font-size:14px;">${ICONS.logo}</div>
+                                    <div class="doc-card-actions">
+                                        <button 
+                                            class="doc-delete-btn" 
+                                            data-delete-id="${doc.docId}" 
+                                            data-delete-title="${this._escapeHtml(doc.title || 'Untitled Document')}" 
+                                            title="Delete this document"
+                                            aria-label="Delete document"
+                                        >
+                                            ${ICONS.trash}
+                                        </button>
+                                        <div style="color:var(--color-primary);font-size:14px;">${ICONS.logo}</div>
+                                    </div>
                                 </div>
                                 <div class="doc-card-snippet">
                                     ${doc.snippet ? this._escapeHtml(doc.snippet) : '<em>Empty document</em>'}
@@ -156,6 +167,33 @@ export class Dashboard {
             });
         }
 
+        // Delete document buttons
+        const deleteButtons = this.container.querySelectorAll('.doc-delete-btn');
+        deleteButtons.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const docId = btn.dataset.deleteId;
+                const docTitle = btn.dataset.deleteTitle || 'this document';
+                
+                const confirmed = window.confirm(`Are you sure you want to delete "${docTitle}"?\n\nThis will permanently delete the document from MongoDB and Redis.`);
+                if (!confirmed) return;
+
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+
+                try {
+                    await api.deleteDocument(docId);
+                    // Remove from local documents list and re-render
+                    this.documents = this.documents.filter(d => d.docId !== docId);
+                    this.render();
+                } catch (err) {
+                    alert(`Failed to delete document: ${err.message}`);
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                }
+            });
+        });
+
         // Create new document button
         const createBtn = this.container.querySelector('#btn-create-doc');
         const emptyCreateBtn = this.container.querySelector('#empty-create-btn');
@@ -188,10 +226,11 @@ export class Dashboard {
             });
         });
 
-        // Document Cards click to open
+        // Document Cards click to open (excluding delete button)
         const docCards = this.container.querySelectorAll('.doc-card');
         docCards.forEach(card => {
-            card.addEventListener('click', () => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.doc-delete-btn')) return;
                 const docId = card.dataset.docId;
                 window.location.hash = `#/doc/${docId}`;
             });

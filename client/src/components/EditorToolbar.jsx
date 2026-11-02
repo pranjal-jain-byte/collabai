@@ -31,6 +31,14 @@ export default function EditorToolbar({
   fontFamily = 'Inter, sans-serif',
   onAlignChange, 
   textAlign = 'left',
+  onToggleBold,
+  isBold = false,
+  onToggleItalic,
+  isItalic = false,
+  onToggleUnderline,
+  isUnderline = false,
+  onToggleStrike,
+  isStrike = false,
   onAiPromptClick 
 }) {
   return (
@@ -101,33 +109,49 @@ export default function EditorToolbar({
 
       <div className="w-px h-5 bg-gray-300 mx-1"></div>
 
-      {/* Text Styles: Disabled in Plain-Text OT mode to prevent raw markdown pollution */}
-      <div className="flex items-center gap-0.5" title="Inline formatting (Bold/Italic/Underline) is disabled in Plain-Text OT real-time mode to prevent collaborative desynchronization. Use Headings, Lists, and Alignment for document structure.">
+      {/* Text Styles: Bold, Italic, Underline, Strikethrough */}
+      <div className="flex items-center gap-0.5">
         <button 
-          disabled
-          className="p-1.5 rounded text-gray-300 cursor-not-allowed"
-          title="Bold (Disabled in Plain-Text OT sync)"
+          onClick={onToggleBold}
+          className={`p-1.5 rounded transition-all cursor-pointer ${
+            isBold 
+              ? 'bg-indigo-100 text-indigo-700 font-bold border border-indigo-200' 
+              : 'hover:bg-gray-200 text-gray-700'
+          }`}
+          title="Bold (Ctrl+B)"
         >
           <Bold className="w-4 h-4" />
         </button>
         <button 
-          disabled
-          className="p-1.5 rounded text-gray-300 cursor-not-allowed"
-          title="Italic (Disabled in Plain-Text OT sync)"
+          onClick={onToggleItalic}
+          className={`p-1.5 rounded transition-all cursor-pointer ${
+            isItalic 
+              ? 'bg-indigo-100 text-indigo-700 font-bold border border-indigo-200' 
+              : 'hover:bg-gray-200 text-gray-700'
+          }`}
+          title="Italic (Ctrl+I)"
         >
           <Italic className="w-4 h-4" />
         </button>
         <button 
-          disabled
-          className="p-1.5 rounded text-gray-300 cursor-not-allowed"
-          title="Underline (Disabled in Plain-Text OT sync)"
+          onClick={onToggleUnderline}
+          className={`p-1.5 rounded transition-all cursor-pointer ${
+            isUnderline 
+              ? 'bg-indigo-100 text-indigo-700 font-bold border border-indigo-200' 
+              : 'hover:bg-gray-200 text-gray-700'
+          }`}
+          title="Underline (Ctrl+U)"
         >
           <Underline className="w-4 h-4" />
         </button>
         <button 
-          disabled
-          className="p-1.5 rounded text-gray-300 cursor-not-allowed"
-          title="Strikethrough (Disabled in Plain-Text OT sync)"
+          onClick={onToggleStrike}
+          className={`p-1.5 rounded transition-all cursor-pointer ${
+            isStrike 
+              ? 'bg-indigo-100 text-indigo-700 font-bold border border-indigo-200' 
+              : 'hover:bg-gray-200 text-gray-700'
+          }`}
+          title="Strikethrough"
         >
           <Strikethrough className="w-4 h-4" />
         </button>

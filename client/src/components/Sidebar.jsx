@@ -56,6 +56,22 @@ export default function Sidebar({ currentDocId, isOpen, onToggle }) {
     (d.title || 'Untitled Document').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleDeleteDoc = async (e, docId, title) => {
+    e.stopPropagation();
+    const confirmed = window.confirm(`Are you sure you want to delete "${title || 'Untitled Document'}"?\n\nThis will permanently delete the document.`);
+    if (!confirmed) return;
+
+    try {
+      await api.deleteDocument(docId);
+      setDocuments(prev => prev.filter(d => d.docId !== docId));
+      if (currentDocId === docId) {
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      alert(`Failed to delete document: ${err.message}`);
+    }
+  };
+
   return (
     <aside
       className={`bg-slate-900 text-slate-200 border-r border-slate-800 flex flex-col transition-all duration-300 relative z-30 shrink-0 ${
@@ -152,19 +168,30 @@ export default function Sidebar({ currentDocId, isOpen, onToggle }) {
         {filteredDocs.map((doc) => {
           const isActive = doc.docId === currentDocId;
           return (
-            <button
+            <div
               key={doc.docId}
               onClick={() => navigate(`/doc/${doc.docId}`)}
-              className={`w-full text-left py-2 px-2.5 rounded-lg flex items-center gap-2.5 text-xs transition-colors cursor-pointer truncate ${
+              className={`w-full text-left py-1.5 px-2.5 rounded-lg flex items-center justify-between gap-1.5 text-xs transition-colors cursor-pointer group ${
                 isActive
                   ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 font-medium'
                   : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
               title={doc.title || 'Untitled Document'}
             >
-              <FileText className={`w-4 h-4 shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
-              {isOpen && <span className="truncate flex-1">{doc.title || 'Untitled Document'}</span>}
-            </button>
+              <div className="flex items-center gap-2 truncate min-w-0 flex-1">
+                <FileText className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
+                {isOpen && <span className="truncate">{doc.title || 'Untitled Document'}</span>}
+              </div>
+              {isOpen && (
+                <button
+                  onClick={(e) => handleDeleteDoc(e, doc.docId, doc.title)}
+                  className="p-1 text-slate-400 hover:text-red-400 hover:bg-slate-700/60 rounded transition-all opacity-0 group-hover:opacity-100 shrink-0 cursor-pointer"
+                  title="Delete document"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           );
         })}
 

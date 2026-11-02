@@ -53,6 +53,8 @@ export class Navbar {
                                         <div class="menu-action" id="menu-export-md"><span>Export as Markdown</span></div>
                                         <div class="menu-divider"></div>
                                         <div class="menu-action" id="menu-print"><span>Print</span><span class="shortcut">Ctrl+P</span></div>
+                                        <div class="menu-divider"></div>
+                                        <div class="menu-action" id="menu-delete-doc"><span style="color:#ef4444;font-weight:500;">Delete Document</span></div>
                                     </div>
                                 </div>
                                 <div class="menu-item" id="menu-edit">
@@ -93,6 +95,11 @@ export class Navbar {
                         <button class="btn btn-secondary btn-sm" id="btn-share" title="Share document link">
                             ${ICONS.share}
                             <span>Share</span>
+                        </button>
+
+                        <button class="btn btn-secondary btn-sm" id="btn-delete-doc" title="Delete document" style="color:#ef4444;border-color:#fecaca;">
+                            ${ICONS.trash}
+                            <span>Delete</span>
                         </button>
 
                         <button class="btn ${isAiOpen ? 'btn-accent' : 'btn-secondary'} btn-sm" id="btn-ai-toggle" title="Toggle Google Gemini Assistant">
@@ -247,6 +254,29 @@ export class Navbar {
                 window.dispatchEvent(new CustomEvent('collabai:ai-request'));
             });
         }
+
+        // Delete Document action & button
+        const handleDeleteDoc = async () => {
+            const docId = store.get('currentDocId');
+            const title = store.get('currentDocTitle') || 'this document';
+            if (!docId) return;
+
+            const confirmed = window.confirm(`Are you sure you want to delete "${title}"?\n\nThis will permanently delete the document from the database.`);
+            if (!confirmed) return;
+
+            try {
+                await api.deleteDocument(docId);
+                window.location.hash = '#/dashboard';
+            } catch (err) {
+                alert(`Failed to delete document: ${err.message}`);
+            }
+        };
+
+        const deleteDocBtn = this.container.querySelector('#btn-delete-doc');
+        if (deleteDocBtn) deleteDocBtn.addEventListener('click', handleDeleteDoc);
+
+        const deleteMenuAction = this.container.querySelector('#menu-delete-doc');
+        if (deleteMenuAction) deleteMenuAction.addEventListener('click', handleDeleteDoc);
     }
 
     _exportDocument(mimeType, ext) {

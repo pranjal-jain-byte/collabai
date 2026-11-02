@@ -17,6 +17,10 @@ export class Editor {
         this.cleanups = [];
         this.undoStack = [];
         this.redoStack = [];
+        this.isBold = false;
+        this.isItalic = false;
+        this.isUnderline = false;
+        this.isStrike = false;
     }
 
     async mount(docId) {
@@ -271,49 +275,89 @@ export class Editor {
             }, 800);
         });
 
-        // Keyboard Shortcuts
+        // Keyboard Shortcuts (Visual formatting toggles without inserting markdown markers)
         canvas.addEventListener('keydown', (e) => {
             if (e.key === 'Tab') {
                 e.preventDefault();
                 this._insertTextAtCursor('    ');
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
                 e.preventDefault();
-                this._wrapSelection('**', '**');
+                this.toggleBold();
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
                 e.preventDefault();
-                this._wrapSelection('*', '*');
+                this.toggleItalic();
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
                 e.preventDefault();
-                this._wrapSelection('<u>', '</u>');
+                this.toggleUnderline();
             }
         });
+    }
+
+    toggleBold() {
+        this.isBold = !this.isBold;
+        const canvas = this.container.querySelector('#editor-canvas');
+        if (canvas) canvas.style.fontWeight = this.isBold ? 'bold' : 'normal';
+        const btn = this.container.querySelector('#tool-bold');
+        if (btn) btn.classList.toggle('active', this.isBold);
+    }
+
+    toggleItalic() {
+        this.isItalic = !this.isItalic;
+        const canvas = this.container.querySelector('#editor-canvas');
+        if (canvas) canvas.style.fontStyle = this.isItalic ? 'italic' : 'normal';
+        const btn = this.container.querySelector('#tool-italic');
+        if (btn) btn.classList.toggle('active', this.isItalic);
+    }
+
+    toggleUnderline() {
+        this.isUnderline = !this.isUnderline;
+        this._updateTextDecoration();
+        const btn = this.container.querySelector('#tool-underline');
+        if (btn) btn.classList.toggle('active', this.isUnderline);
+    }
+
+    toggleStrike() {
+        this.isStrike = !this.isStrike;
+        this._updateTextDecoration();
+        const btn = this.container.querySelector('#tool-strike');
+        if (btn) btn.classList.toggle('active', this.isStrike);
+    }
+
+    _updateTextDecoration() {
+        const canvas = this.container.querySelector('#editor-canvas');
+        if (!canvas) return;
+        const decs = [];
+        if (this.isUnderline) decs.push('underline');
+        if (this.isStrike) decs.push('line-through');
+        canvas.style.textDecoration = decs.length > 0 ? decs.join(' ') : 'none';
     }
 
     _attachToolbarListeners() {
         const canvas = this.container.querySelector('#editor-canvas');
         if (!canvas) return;
 
-        // Formatting Buttons
-        this._bindBtn('#tool-bold', () => this._wrapSelection('**', '**'));
-        this._bindBtn('#tool-italic', () => this._wrapSelection('*', '*'));
-        this._bindBtn('#tool-underline', () => this._wrapSelection('<u>', '</u>'));
-        this._bindBtn('#tool-strike', () => this._wrapSelection('~~', '~~'));
+        // Formatting Buttons: Visual styling toggles
+        this._bindBtn('#tool-bold', () => this.toggleBold());
+        this._bindBtn('#tool-italic', () => this.toggleItalic());
+        this._bindBtn('#tool-underline', () => this.toggleUnderline());
+        this._bindBtn('#tool-strike', () => this.toggleStrike());
 
-        // Headings Dropdown
+        // Headings Dropdown: Visual typography scale
         const headingSelect = this.container.querySelector('#tool-heading');
         if (headingSelect) {
             headingSelect.addEventListener('change', (e) => {
                 const val = e.target.value;
-                const prefixMap = {
-                    title: '# ',
-                    h1: '## ',
-                    h2: '### ',
-                    h3: '#### '
+                const sizeMap = {
+                    title: { size: '28px', weight: '700' },
+                    h1: { size: '24px', weight: '700' },
+                    h2: { size: '20px', weight: '600' },
+                    h3: { size: '17px', weight: '600' },
+                    normal: { size: '15px', weight: this.isBold ? 'bold' : 'normal' }
                 };
-                if (prefixMap[val]) {
-                    this._prependLinePrefix(prefixMap[val]);
+                if (sizeMap[val]) {
+                    canvas.style.fontSize = sizeMap[val].size;
+                    canvas.style.fontWeight = sizeMap[val].weight;
                 }
-                headingSelect.value = 'normal';
             });
         }
 

@@ -294,9 +294,9 @@ export default function DashboardPage() {
                         <button
                           onClick={(e) => handleDeleteDocument(e, doc.docId, doc.title)}
                           title="Delete document"
-                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all cursor-pointer"
+                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all cursor-pointer opacity-75 hover:opacity-100"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                         <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
                       </div>

@@ -191,6 +191,35 @@
     gap: 8px;
 }
 
+.doc-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.doc-delete-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+}
+
+.doc-delete-btn:hover {
+    color: #ef4444;
+    background: #fef2f2;
+    border-color: #fecaca;
+    opacity: 1;
+    transform: scale(1.05);
+}
+
 .doc-card-title {
     font-size: 15px;
     font-weight: 600;

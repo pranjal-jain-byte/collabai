@@ -9,6 +9,10 @@ export default function DocumentCanvas({
   textareaRef, 
   fontFamily = 'Inter, sans-serif',
   textAlign = 'left',
+  isBold = false,
+  isItalic = false,
+  isUnderline = false,
+  isStrike = false,
   version = 0,
   collaborators = [],
   onKeyDown,
@@ -19,6 +23,13 @@ export default function DocumentCanvas({
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
     return { wordCount: words, charCount: text.length };
   }, [content]);
+
+  const textDecoration = useMemo(() => {
+    const decs = [];
+    if (isUnderline) decs.push('underline');
+    if (isStrike) decs.push('line-through');
+    return decs.length > 0 ? decs.join(' ') : 'none';
+  }, [isUnderline, isStrike]);
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-100/80 py-8 px-4 flex flex-col items-center cursor-text relative">
@@ -47,6 +58,9 @@ export default function DocumentCanvas({
             style={{ 
               fontFamily, 
               textAlign: textAlign || 'left',
+              fontWeight: isBold ? '700' : 'normal',
+              fontStyle: isItalic ? 'italic' : 'normal',
+              textDecoration,
               direction: 'ltr' 
             }}
             className="w-full min-h-[900px] bg-transparent border-none outline-none resize-none text-[15px] leading-relaxed text-gray-800 placeholder-gray-400 whitespace-pre-wrap break-words relative z-10"

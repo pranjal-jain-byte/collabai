@@ -136,6 +136,14 @@ class ApiService {
         return await res.json();
     }
 
+    async deleteDocument(docId) {
+        const res = await this.request(`/api/documents/${docId}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) throw new Error('Failed to delete document');
+        return await res.json();
+    }
+
     async getStatus() {
         const res = await this.request('/api/status');
         if (!res.ok) return { status: 'unknown' };

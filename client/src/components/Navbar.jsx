@@ -20,7 +20,8 @@ import {
   FileSearch,
   MessageSquare,
   History,
-  ListTodo
+  ListTodo,
+  Trash2
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.jsx';
 import ConnectionStatus from './ConnectionStatus.jsx';
@@ -33,6 +34,7 @@ export default function Navbar({
   connectionStatus = 'connected',
   collaborators = [],
   onShareClick,
+  onDeleteDocument,
   isAiOpen,
   onAiToggle,
   onUndo,
@@ -134,6 +136,18 @@ export default function Navbar({
                       <span>Print Document</span>
                       <Printer className="w-3.5 h-3.5 text-gray-400" />
                     </button>
+                    {onDeleteDocument && (
+                      <>
+                        <div className="h-px bg-gray-200 my-1"></div>
+                        <button 
+                          onClick={() => { setActiveMenu(null); onDeleteDocument(); }}
+                          className="w-full px-3 py-1.5 text-left hover:bg-red-50 text-red-600 flex items-center justify-between cursor-pointer font-medium"
+                        >
+                          <span>Delete Document</span>
+                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -293,6 +307,18 @@ export default function Navbar({
             <Share2 className="w-3.5 h-3.5 text-gray-600" />
             <span className="hidden sm:inline">Share</span>
           </button>
+
+          {/* Delete Document Button */}
+          {onDeleteDocument && (
+            <button 
+              onClick={onDeleteDocument}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-md transition-colors cursor-pointer"
+              title="Delete this document"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+              <span className="hidden md:inline">Delete</span>
+            </button>
+          )}
 
           {/* User Profile Avatar */}
           {user && (

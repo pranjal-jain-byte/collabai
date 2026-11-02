@@ -54,6 +54,10 @@ export default function EditorPage() {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [fontFamily, setFontFamily] = useState('Inter, sans-serif');
   const [textAlign, setTextAlign] = useState('left');
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const [isUnderline, setIsUnderline] = useState(false);
+  const [isStrike, setIsStrike] = useState(false);
 
   const handleOpenRightTab = (tabId) => {
     if (isRightPanelOpen && activeRightTab === tabId) {
@@ -61,6 +65,36 @@ export default function EditorPage() {
     } else {
       setActiveRightTab(tabId);
       setIsRightPanelOpen(true);
+    }
+  };
+
+  // Delete Document handler
+  const handleDeleteDocument = async () => {
+    const docTitle = title || 'this document';
+    const confirmed = window.confirm(`Are you sure you want to delete "${docTitle}"?\n\nThis will permanently delete the document from the database.`);
+    if (!confirmed) return;
+
+    try {
+      await api.deleteDocument(docId);
+      navigate('/dashboard');
+    } catch (err) {
+      alert(`Failed to delete document: ${err.message}`);
+    }
+  };
+
+  // Keyboard shortcut handler for Bold/Italic/Underline formatting
+  const handleEditorKeyDownWithFormatting = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      setIsBold(prev => !prev);
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      setIsItalic(prev => !prev);
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+      e.preventDefault();
+      setIsUnderline(prev => !prev);
+    } else {
+      handleEditorKeyDown(e);
     }
   };
 
@@ -103,6 +137,7 @@ export default function EditorPage() {
           connectionStatus={connectionStatus}
           collaborators={collaborators}
           onShareClick={() => setIsShareOpen(true)}
+          onDeleteDocument={handleDeleteDocument}
           onUndo={undo}
           onRedo={redo}
           onExportTxt={() => handleExport('text/plain', 'txt')}
@@ -129,6 +164,14 @@ export default function EditorPage() {
           fontFamily={fontFamily}
           onAlignChange={setTextAlign}
           textAlign={textAlign}
+          isBold={isBold}
+          onToggleBold={() => setIsBold(prev => !prev)}
+          isItalic={isItalic}
+          onToggleItalic={() => setIsItalic(prev => !prev)}
+          isUnderline={isUnderline}
+          onToggleUnderline={() => setIsUnderline(prev => !prev)}
+          isStrike={isStrike}
+          onToggleStrike={() => setIsStrike(prev => !prev)}
           onAiPromptClick={() => handleOpenRightTab('assistant')}
         />
 
@@ -167,9 +210,13 @@ export default function EditorPage() {
             textareaRef={textareaRef}
             fontFamily={fontFamily}
             textAlign={textAlign}
+            isBold={isBold}
+            isItalic={isItalic}
+            isUnderline={isUnderline}
+            isStrike={isStrike}
             version={version}
             collaborators={collaborators}
-            onKeyDown={handleEditorKeyDown}
+            onKeyDown={handleEditorKeyDownWithFormatting}
             onCursorMove={handleCursorActivity}
           />
 
