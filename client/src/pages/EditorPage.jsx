@@ -82,20 +82,71 @@ export default function EditorPage() {
     }
   };
 
+  const updateFormattingStates = () => {
+    try {
+      setIsBold(document.queryCommandState('bold'));
+      setIsItalic(document.queryCommandState('italic'));
+      setIsUnderline(document.queryCommandState('underline'));
+      setIsStrike(document.queryCommandState('strikeThrough'));
+    } catch (e) {}
+  };
+
+  const handleToggleBold = () => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      document.execCommand('bold', false, null);
+      handleContentChange(textareaRef.current.innerHTML);
+      updateFormattingStates();
+    }
+  };
+
+  const handleToggleItalic = () => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      document.execCommand('italic', false, null);
+      handleContentChange(textareaRef.current.innerHTML);
+      updateFormattingStates();
+    }
+  };
+
+  const handleToggleUnderline = () => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      document.execCommand('underline', false, null);
+      handleContentChange(textareaRef.current.innerHTML);
+      updateFormattingStates();
+    }
+  };
+
+  const handleToggleStrike = () => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      document.execCommand('strikeThrough', false, null);
+      handleContentChange(textareaRef.current.innerHTML);
+      updateFormattingStates();
+    }
+  };
+
   // Keyboard shortcut handler for Bold/Italic/Underline formatting
   const handleEditorKeyDownWithFormatting = (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
       e.preventDefault();
-      setIsBold(prev => !prev);
+      handleToggleBold();
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
       e.preventDefault();
-      setIsItalic(prev => !prev);
+      handleToggleItalic();
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
       e.preventDefault();
-      setIsUnderline(prev => !prev);
+      handleToggleUnderline();
     } else {
       handleEditorKeyDown(e);
+      setTimeout(updateFormattingStates, 10);
     }
+  };
+
+  const handleCursorActivityWithStates = (e) => {
+    handleCursorActivity(e);
+    updateFormattingStates();
   };
 
   // Export handlers
@@ -165,13 +216,13 @@ export default function EditorPage() {
           onAlignChange={setTextAlign}
           textAlign={textAlign}
           isBold={isBold}
-          onToggleBold={() => setIsBold(prev => !prev)}
+          onToggleBold={handleToggleBold}
           isItalic={isItalic}
-          onToggleItalic={() => setIsItalic(prev => !prev)}
+          onToggleItalic={handleToggleItalic}
           isUnderline={isUnderline}
-          onToggleUnderline={() => setIsUnderline(prev => !prev)}
+          onToggleUnderline={handleToggleUnderline}
           isStrike={isStrike}
-          onToggleStrike={() => setIsStrike(prev => !prev)}
+          onToggleStrike={handleToggleStrike}
           onAiPromptClick={() => handleOpenRightTab('assistant')}
         />
 
@@ -217,7 +268,7 @@ export default function EditorPage() {
             version={version}
             collaborators={collaborators}
             onKeyDown={handleEditorKeyDownWithFormatting}
-            onCursorMove={handleCursorActivity}
+            onCursorMove={handleCursorActivityWithStates}
           />
 
           {/* Right Workspace Intelligence Panel */}

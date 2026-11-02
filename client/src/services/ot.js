@@ -167,9 +167,7 @@ export function cleanMalformedContent(text) {
   let cleaned = text
     .replace(/\*{4,}/g, '')
     .replace(/~{4,}/g, '')
-    .replace(/<u>\s*~*\s*<\/u>/gi, '')
-    .replace(/<u>/gi, '')
-    .replace(/<\/u>/gi, '');
+    .replace(/<u>\s*~*\s*<\/u>/gi, '');
 
   // Collapse repeated prefix spam on the same line (e.g. "1. 1. 1. 1. - - ### - - ")
   cleaned = cleaned.replace(/^(\s*(?:1\.\s*|- \s*|###\s*)){2,}/gm, (match) => {

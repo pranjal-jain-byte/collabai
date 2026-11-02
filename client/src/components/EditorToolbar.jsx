@@ -112,6 +112,7 @@ export default function EditorToolbar({
       {/* Text Styles: Bold, Italic, Underline, Strikethrough */}
       <div className="flex items-center gap-0.5">
         <button 
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onToggleBold}
           className={`p-1.5 rounded transition-all cursor-pointer ${
             isBold 
@@ -123,6 +124,7 @@ export default function EditorToolbar({
           <Bold className="w-4 h-4" />
         </button>
         <button 
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onToggleItalic}
           className={`p-1.5 rounded transition-all cursor-pointer ${
             isItalic 
@@ -134,6 +136,7 @@ export default function EditorToolbar({
           <Italic className="w-4 h-4" />
         </button>
         <button 
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onToggleUnderline}
           className={`p-1.5 rounded transition-all cursor-pointer ${
             isUnderline 
@@ -145,6 +148,7 @@ export default function EditorToolbar({
           <Underline className="w-4 h-4" />
         </button>
         <button 
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onToggleStrike}
           className={`p-1.5 rounded transition-all cursor-pointer ${
             isStrike 

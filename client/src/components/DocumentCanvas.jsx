@@ -1,6 +1,6 @@
 // DocumentCanvas Component - Centered Google Docs Canvas with Real-Time Cursors
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import CollaboratorCursors from './CollaboratorCursors.jsx';
 
 export default function DocumentCanvas({ 
@@ -9,27 +9,45 @@ export default function DocumentCanvas({
   textareaRef, 
   fontFamily = 'Inter, sans-serif',
   textAlign = 'left',
-  isBold = false,
-  isItalic = false,
-  isUnderline = false,
-  isStrike = false,
   version = 0,
   collaborators = [],
   onKeyDown,
   onCursorMove,
 }) {
   const { wordCount, charCount } = useMemo(() => {
-    const text = content || '';
+    const tmp = typeof document !== 'undefined' ? document.createElement('div') : null;
+    if (tmp) {
+      tmp.innerHTML = content || '';
+      const text = tmp.innerText || tmp.textContent || '';
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      return { wordCount: words, charCount: text.length };
+    }
+    const text = (content || '').replace(/<[^>]*>/g, '');
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
     return { wordCount: words, charCount: text.length };
   }, [content]);
 
-  const textDecoration = useMemo(() => {
-    const decs = [];
-    if (isUnderline) decs.push('underline');
-    if (isStrike) decs.push('line-through');
-    return decs.length > 0 ? decs.join(' ') : 'none';
-  }, [isUnderline, isStrike]);
+  // Synchronize incoming content with innerHTML without resetting cursor on local typing
+  useEffect(() => {
+    const el = textareaRef?.current;
+    if (el && el.innerHTML !== (content || '')) {
+      el.innerHTML = content || '';
+    }
+  }, [content, textareaRef]);
+
+  // Provide compatibility property descriptor for .value on contenteditable div
+  useEffect(() => {
+    const el = textareaRef?.current;
+    if (el && !Object.getOwnPropertyDescriptor(el, 'value')) {
+      try {
+        Object.defineProperty(el, 'value', {
+          get() { return this.innerHTML; },
+          set(v) { this.innerHTML = v; },
+          configurable: true
+        });
+      } catch (e) {}
+    }
+  }, [textareaRef]);
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-100/80 py-8 px-4 flex flex-col items-center cursor-text relative">
@@ -45,25 +63,23 @@ export default function DocumentCanvas({
             textareaRef={textareaRef} 
             content={content} 
           />
-          <textarea
+          <div
             ref={textareaRef}
-            value={content}
-            onChange={(e) => onChange(e.target.value)}
+            contentEditable={true}
+            suppressContentEditableWarning={true}
+            onInput={(e) => onChange(e.currentTarget.innerHTML)}
             onKeyDown={onKeyDown}
             onSelect={onCursorMove}
             onKeyUp={onCursorMove}
             onClick={onCursorMove}
-            placeholder="Start typing your document... Keystrokes synchronize collaboratively in real time using Operational Transformation."
+            data-placeholder="Start typing your document... Keystrokes synchronize collaboratively in real time using Operational Transformation."
             spellCheck="true"
             style={{ 
               fontFamily, 
               textAlign: textAlign || 'left',
-              fontWeight: isBold ? '700' : 'normal',
-              fontStyle: isItalic ? 'italic' : 'normal',
-              textDecoration,
               direction: 'ltr' 
             }}
-            className="w-full min-h-[900px] bg-transparent border-none outline-none resize-none text-[15px] leading-relaxed text-gray-800 placeholder-gray-400 whitespace-pre-wrap break-words relative z-10"
+            className="w-full min-h-[900px] bg-transparent border-none outline-none text-[15px] leading-relaxed text-gray-800 placeholder-gray-400 whitespace-pre-wrap break-words relative z-10 document-canvas focus:outline-none"
           />
         </div>
       </div>

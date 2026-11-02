@@ -220,3 +220,37 @@
 .sync-status.saved {
     color: #059669;
 }
+
+/* GitHub Navbar Link */
+.nav-github-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-decoration: none !important;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: white;
+    transition: all var(--transition-fast);
+}
+
+.nav-github-btn:hover {
+    border-color: #111827;
+    background-color: #f9fafb;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.06);
+}
+
+.github-star-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: var(--radius-full);
+    color: #4b5563;
+}
+

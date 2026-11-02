@@ -18,7 +18,8 @@ import {
   ShieldCheck,
   Users,
   Check,
-  MousePointer2
+  MousePointer2,
+  Github
 } from 'lucide-react';
 import Navbar from '../components/Navbar.jsx';
 
@@ -83,6 +84,15 @@ export default function LandingPage() {
           <a href="#security" className="text-xs font-medium text-slate-400 hover:text-white transition-colors hidden sm:inline">
             Security
           </a>
+          <a
+            href="https://github.com/pranjal-jain-byte/collabai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors"
+          >
+            <Github className="w-3.5 h-3.5" />
+            <span>GitHub</span>
+          </a>
           <Link
             to="/dashboard"
             className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all"
@@ -121,6 +131,15 @@ export default function LandingPage() {
             <span>Start collaborating</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
+          <a
+            href="https://github.com/pranjal-jain-byte/collabai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-6 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl border border-slate-700 transition-all flex items-center gap-2 text-sm cursor-pointer shadow-md hover:-translate-y-0.5"
+          >
+            <Github className="w-4 h-4" />
+            <span>GitHub Repo</span>
+          </a>
           <a
             href="#features"
             className="px-6 py-3.5 bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold rounded-xl border border-slate-800 transition-colors text-sm cursor-pointer"
@@ -397,6 +416,15 @@ export default function LandingPage() {
         </div>
         <div className="flex items-center gap-6">
           <Link to="/dashboard" className="hover:text-slate-300 transition-colors">Workspace</Link>
+          <a
+            href="https://github.com/pranjal-jain-byte/collabai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 hover:text-white transition-colors"
+          >
+            <Github className="w-3.5 h-3.5" />
+            <span>GitHub</span>
+          </a>
           <a href="#features" className="hover:text-slate-300 transition-colors">Features</a>
           <a href="#security" className="hover:text-slate-300 transition-colors">Security</a>
         </div>

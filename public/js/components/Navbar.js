@@ -107,6 +107,11 @@ export class Navbar {
                             <span>Gemini AI</span>
                         </button>
 
+                        <a href="https://github.com/pranjal-jain-byte/collabai" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" title="View Source on GitHub">
+                            ${ICONS.github}
+                            <span>GitHub</span>
+                        </a>
+
                         ${user ? `
                             <div class="avatar" style="background-color: ${user.color}" title="${user.name} (${user.id})">
                                 ${user.name.charAt(0)}
@@ -139,6 +144,11 @@ export class Navbar {
                     `}
 
                     <div class="nav-actions">
+                        <a href="https://github.com/pranjal-jain-byte/collabai" target="_blank" rel="noopener" class="btn btn-ghost btn-sm nav-github-btn" title="View Source on GitHub">
+                            ${ICONS.github}
+                            <span>GitHub</span>
+                            <span class="github-star-chip">★ Star</span>
+                        </a>
                         ${user ? `
                             <a href="#/dashboard" class="btn btn-secondary btn-sm">Documents</a>
                             <div class="avatar" style="background-color: ${user.color}" title="${user.name}">

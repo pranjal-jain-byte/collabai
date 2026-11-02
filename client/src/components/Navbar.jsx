@@ -21,7 +21,8 @@ import {
   MessageSquare,
   History,
   ListTodo,
-  Trash2
+  Trash2,
+  Github
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.jsx';
 import ConnectionStatus from './ConnectionStatus.jsx';
@@ -362,6 +363,17 @@ export default function Navbar({
       )}
 
       <div className="flex items-center gap-3">
+        <a
+          href="https://github.com/pranjal-jain-byte/collabai"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md transition-all hover:-translate-y-0.5 shadow-xs"
+          title="View Source on GitHub"
+        >
+          <Github className="w-3.5 h-3.5" />
+          <span>GitHub</span>
+          <span className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-600 font-mono">★ Star</span>
+        </a>
         {user ? (
           <>
             <Link 

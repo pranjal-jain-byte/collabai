@@ -15,12 +15,6 @@ export class Editor {
         this.applyingRemoteOp = false;
         this.typingDebounce = null;
         this.cleanups = [];
-        this.undoStack = [];
-        this.redoStack = [];
-        this.isBold = false;
-        this.isItalic = false;
-        this.isUnderline = false;
-        this.isStrike = false;
     }
 
     async mount(docId) {
@@ -37,7 +31,7 @@ export class Editor {
             this.docVersion = docData.version || 0;
             const canvas = this.container.querySelector('#editor-canvas');
             if (canvas && docData.content) {
-                canvas.value = docData.content;
+                canvas.innerHTML = docData.content;
                 this.previousValue = docData.content;
                 this._updateCounters();
             }
@@ -141,12 +135,13 @@ export class Editor {
                     <div class="editor-scroll-area" id="editor-scroll-area">
                         <!-- Centered Document Page -->
                         <div class="document-page" id="document-page">
-                            <textarea 
+                            <div 
                                 class="document-canvas" 
                                 id="editor-canvas" 
-                                placeholder="Start typing your document... Every keystroke syncs in real time via Operational Transformation."
+                                contenteditable="true"
                                 spellcheck="true"
-                            ></textarea>
+                                data-placeholder="Start typing your document... Every keystroke syncs in real time via Operational Transformation."
+                            ></div>
                         </div>
 
                         <!-- Technical protocol badge -->
@@ -191,11 +186,12 @@ export class Editor {
                 if (data.title) store.set('currentDocTitle', data.title);
             }
             if (canvas) {
-                canvas.value = content;
+                canvas.innerHTML = content;
                 this.previousValue = content;
                 this.docVersion = version;
                 this._updateCounters();
                 this._updateVersionBadge();
+                this._updateActiveToolbarStates();
             }
         });
 
@@ -203,25 +199,25 @@ export class Editor {
         const unOp = socketService.on('operation', ({ ops, version }) => {
             if (!canvas) return;
 
-            let cursorPos = canvas.selectionStart;
+            const savedSel = this._saveSelection(canvas);
             this.applyingRemoteOp = true;
 
-            let text = canvas.value;
+            let text = canvas.innerHTML;
             for (const op of ops) {
-                // Adjust local cursor offset using OT transformation
-                cursorPos = transformCursor(cursorPos, op);
                 text = applyOperation(text, op);
             }
 
-            canvas.value = text;
+            canvas.innerHTML = text;
             this.previousValue = text;
             this.docVersion = version;
             this.applyingRemoteOp = false;
 
-            // Restore transformed cursor position
-            canvas.selectionStart = canvas.selectionEnd = cursorPos;
+            if (savedSel) {
+                this._restoreSelection(canvas, savedSel);
+            }
             this._updateCounters();
             this._updateVersionBadge();
+            this._updateActiveToolbarStates();
         });
 
         // 3. Operation Acknowledgment
@@ -245,41 +241,75 @@ export class Editor {
         const canvas = this.container.querySelector('#editor-canvas');
         if (!canvas) return;
 
+        // Provide compatibility properties for code that interacts with textarea-like interface
+        try {
+            Object.defineProperty(canvas, 'value', {
+                get: () => canvas.innerHTML,
+                set: (val) => { canvas.innerHTML = val; },
+                configurable: true
+            });
+
+            Object.defineProperty(canvas, 'selectionStart', {
+                get: () => {
+                    const sel = this._saveSelection(canvas);
+                    return sel ? sel.start : 0;
+                },
+                set: (pos) => {
+                    this._setCaretPosition(canvas, pos, pos);
+                },
+                configurable: true
+            });
+
+            Object.defineProperty(canvas, 'selectionEnd', {
+                get: () => {
+                    const sel = this._saveSelection(canvas);
+                    return sel ? sel.end : 0;
+                },
+                set: (pos) => {
+                    const curStart = canvas.selectionStart;
+                    this._setCaretPosition(canvas, curStart, pos);
+                },
+                configurable: true
+            });
+        } catch (e) {
+            console.warn('[Editor] Property definition warning:', e.message);
+        }
+
         // Focus canvas when clicking anywhere on the document page
         const docPage = this.container.querySelector('#document-page');
         if (docPage) {
-            docPage.addEventListener('click', () => canvas.focus());
+            docPage.addEventListener('click', (e) => {
+                if (e.target === docPage) {
+                    canvas.focus();
+                }
+            });
         }
 
         // Handle typing: OT synchronization & AI suggestion trigger
         canvas.addEventListener('input', () => {
-            if (this.applyingRemoteOp) return;
-
-            const newValue = canvas.value;
-            const ops = diffText(this.previousValue, newValue);
-            this.previousValue = newValue;
-
-            if (ops.length > 0) {
-                store.set('saveStatus', 'saving');
-                socketService.sendOperation(this.docId, ops, this.docVersion);
-            }
-
-            this._updateCounters();
-
-            // Trigger debounced AI suggestion after typing pause (800ms)
-            clearTimeout(this.typingDebounce);
-            this.typingDebounce = setTimeout(() => {
-                if (canvas.value.trim().length > 0) {
-                    socketService.requestSuggestion(canvas.value);
-                }
-            }, 800);
+            this._handleCanvasInput();
         });
 
-        // Keyboard Shortcuts (Visual formatting toggles without inserting markdown markers)
+        // Sync toolbar buttons on mouse and keyboard selection changes
+        canvas.addEventListener('mouseup', () => this._updateActiveToolbarStates());
+        canvas.addEventListener('keyup', () => this._updateActiveToolbarStates());
+        canvas.addEventListener('click', () => this._updateActiveToolbarStates());
+
+        const handleSelChange = () => {
+            const sel = window.getSelection();
+            if (sel && sel.anchorNode && canvas.contains(sel.anchorNode)) {
+                this._updateActiveToolbarStates();
+            }
+        };
+        document.addEventListener('selectionchange', handleSelChange);
+        this.cleanups.push(() => document.removeEventListener('selectionchange', handleSelChange));
+
+        // Keyboard Shortcuts (Visual formatting toggles on selection)
         canvas.addEventListener('keydown', (e) => {
             if (e.key === 'Tab') {
                 e.preventDefault();
-                this._insertTextAtCursor('    ');
+                document.execCommand('insertText', false, '    ');
+                this._handleCanvasInput();
             } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
                 e.preventDefault();
                 this.toggleBold();
@@ -293,71 +323,126 @@ export class Editor {
         });
     }
 
-    toggleBold() {
-        this.isBold = !this.isBold;
+    _handleCanvasInput() {
         const canvas = this.container.querySelector('#editor-canvas');
-        if (canvas) canvas.style.fontWeight = this.isBold ? 'bold' : 'normal';
-        const btn = this.container.querySelector('#tool-bold');
-        if (btn) btn.classList.toggle('active', this.isBold);
+        if (!canvas || this.applyingRemoteOp) return;
+
+        const newValue = canvas.innerHTML;
+        const ops = diffText(this.previousValue, newValue);
+        this.previousValue = newValue;
+
+        if (ops.length > 0) {
+            store.set('saveStatus', 'saving');
+            socketService.sendOperation(this.docId, ops, this.docVersion);
+        }
+
+        this._updateCounters();
+        this._updateActiveToolbarStates();
+
+        // Trigger debounced AI suggestion after typing pause (800ms)
+        clearTimeout(this.typingDebounce);
+        this.typingDebounce = setTimeout(() => {
+            const textContent = canvas.innerText || canvas.textContent || '';
+            if (textContent.trim().length > 0) {
+                socketService.requestSuggestion(textContent);
+            }
+        }, 800);
+    }
+
+    // Formatting methods: native document.execCommand formats strictly the SELECTED text
+    toggleBold() {
+        const canvas = this.container.querySelector('#editor-canvas');
+        if (!canvas) return;
+        canvas.focus();
+        document.execCommand('bold', false, null);
+        this._handleCanvasInput();
     }
 
     toggleItalic() {
-        this.isItalic = !this.isItalic;
         const canvas = this.container.querySelector('#editor-canvas');
-        if (canvas) canvas.style.fontStyle = this.isItalic ? 'italic' : 'normal';
-        const btn = this.container.querySelector('#tool-italic');
-        if (btn) btn.classList.toggle('active', this.isItalic);
+        if (!canvas) return;
+        canvas.focus();
+        document.execCommand('italic', false, null);
+        this._handleCanvasInput();
     }
 
     toggleUnderline() {
-        this.isUnderline = !this.isUnderline;
-        this._updateTextDecoration();
-        const btn = this.container.querySelector('#tool-underline');
-        if (btn) btn.classList.toggle('active', this.isUnderline);
+        const canvas = this.container.querySelector('#editor-canvas');
+        if (!canvas) return;
+        canvas.focus();
+        document.execCommand('underline', false, null);
+        this._handleCanvasInput();
     }
 
     toggleStrike() {
-        this.isStrike = !this.isStrike;
-        this._updateTextDecoration();
-        const btn = this.container.querySelector('#tool-strike');
-        if (btn) btn.classList.toggle('active', this.isStrike);
-    }
-
-    _updateTextDecoration() {
         const canvas = this.container.querySelector('#editor-canvas');
         if (!canvas) return;
-        const decs = [];
-        if (this.isUnderline) decs.push('underline');
-        if (this.isStrike) decs.push('line-through');
-        canvas.style.textDecoration = decs.length > 0 ? decs.join(' ') : 'none';
+        canvas.focus();
+        document.execCommand('strikeThrough', false, null);
+        this._handleCanvasInput();
+    }
+
+    _updateActiveToolbarStates() {
+        const btnBold = this.container.querySelector('#tool-bold');
+        const btnItalic = this.container.querySelector('#tool-italic');
+        const btnUnderline = this.container.querySelector('#tool-underline');
+        const btnStrike = this.container.querySelector('#tool-strike');
+
+        try {
+            if (btnBold) btnBold.classList.toggle('active', document.queryCommandState('bold'));
+            if (btnItalic) btnItalic.classList.toggle('active', document.queryCommandState('italic'));
+            if (btnUnderline) btnUnderline.classList.toggle('active', document.queryCommandState('underline'));
+            if (btnStrike) btnStrike.classList.toggle('active', document.queryCommandState('strikeThrough'));
+        } catch (e) {
+            // Ignore if queryCommandState is unavailable
+        }
     }
 
     _attachToolbarListeners() {
         const canvas = this.container.querySelector('#editor-canvas');
         if (!canvas) return;
 
-        // Formatting Buttons: Visual styling toggles
+        // CRITICAL: Prevent toolbar buttons from stealing focus and losing selection in canvas
+        const toolbarButtons = this.container.querySelectorAll('.editor-toolbar button');
+        toolbarButtons.forEach(btn => {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+            });
+        });
+
+        // Undo / Redo
+        this._bindBtn('#tool-undo', () => {
+            canvas.focus();
+            document.execCommand('undo', false, null);
+            this._handleCanvasInput();
+        });
+        this._bindBtn('#tool-redo', () => {
+            canvas.focus();
+            document.execCommand('redo', false, null);
+            this._handleCanvasInput();
+        });
+
+        // Formatting Buttons: Native rich-text selection formatting
         this._bindBtn('#tool-bold', () => this.toggleBold());
         this._bindBtn('#tool-italic', () => this.toggleItalic());
         this._bindBtn('#tool-underline', () => this.toggleUnderline());
         this._bindBtn('#tool-strike', () => this.toggleStrike());
 
-        // Headings Dropdown: Visual typography scale
+        // Headings Dropdown: Native formatBlock
         const headingSelect = this.container.querySelector('#tool-heading');
         if (headingSelect) {
             headingSelect.addEventListener('change', (e) => {
                 const val = e.target.value;
-                const sizeMap = {
-                    title: { size: '28px', weight: '700' },
-                    h1: { size: '24px', weight: '700' },
-                    h2: { size: '20px', weight: '600' },
-                    h3: { size: '17px', weight: '600' },
-                    normal: { size: '15px', weight: this.isBold ? 'bold' : 'normal' }
+                const tagMap = {
+                    title: '<h1>',
+                    h1: '<h1>',
+                    h2: '<h2>',
+                    h3: '<h3>',
+                    normal: '<p>'
                 };
-                if (sizeMap[val]) {
-                    canvas.style.fontSize = sizeMap[val].size;
-                    canvas.style.fontWeight = sizeMap[val].weight;
-                }
+                canvas.focus();
+                document.execCommand('formatBlock', false, tagMap[val] || '<p>');
+                this._handleCanvasInput();
             });
         }
 
@@ -365,34 +450,47 @@ export class Editor {
         const fontSelect = this.container.querySelector('#tool-font');
         if (fontSelect) {
             fontSelect.addEventListener('change', (e) => {
-                canvas.style.fontFamily = e.target.value;
+                canvas.focus();
+                document.execCommand('fontName', false, e.target.value);
+                this._handleCanvasInput();
             });
         }
 
-        // Alignment Buttons (Visual page text alignment)
+        // Alignment Buttons
         const alignLeft = this.container.querySelector('#tool-align-left');
         const alignCenter = this.container.querySelector('#tool-align-center');
         const alignRight = this.container.querySelector('#tool-align-right');
 
-        const setAlign = (align, activeBtn) => {
-            canvas.style.textAlign = align;
+        const setAlign = (cmd, activeBtn) => {
+            canvas.focus();
+            document.execCommand(cmd, false, null);
             [alignLeft, alignCenter, alignRight].forEach(b => b?.classList.remove('active'));
             activeBtn?.classList.add('active');
+            this._handleCanvasInput();
         };
 
-        alignLeft?.addEventListener('click', () => setAlign('left', alignLeft));
-        alignCenter?.addEventListener('click', () => setAlign('center', alignCenter));
-        alignRight?.addEventListener('click', () => setAlign('right', alignRight));
+        alignLeft?.addEventListener('click', () => setAlign('justifyLeft', alignLeft));
+        alignCenter?.addEventListener('click', () => setAlign('justifyCenter', alignCenter));
+        alignRight?.addEventListener('click', () => setAlign('justifyRight', alignRight));
 
         // Lists
-        this._bindBtn('#tool-bullet-list', () => this._prependLinePrefix('- '));
-        this._bindBtn('#tool-number-list', () => this._prependLinePrefix('1. '));
+        this._bindBtn('#tool-bullet-list', () => {
+            canvas.focus();
+            document.execCommand('insertUnorderedList', false, null);
+            this._handleCanvasInput();
+        });
+        this._bindBtn('#tool-number-list', () => {
+            canvas.focus();
+            document.execCommand('insertOrderedList', false, null);
+            this._handleCanvasInput();
+        });
 
         // AI Prompt Button
         this._bindBtn('#tool-ai-prompt', () => {
             store.set('isAiDrawerOpen', true);
-            if (canvas.value.trim().length > 0) {
-                socketService.requestSuggestion(canvas.value);
+            const textContent = canvas.innerText || canvas.textContent || '';
+            if (textContent.trim().length > 0) {
+                socketService.requestSuggestion(textContent);
             }
         });
     }
@@ -402,47 +500,74 @@ export class Editor {
         if (btn) btn.addEventListener('click', action);
     }
 
-    _wrapSelection(before, after) {
-        const canvas = this.container.querySelector('#editor-canvas');
-        if (!canvas) return;
+    _setCaretPosition(element, start, end) {
+        if (!element) return;
+        const sel = window.getSelection();
+        if (!sel) return;
 
-        const start = canvas.selectionStart;
-        const end = canvas.selectionEnd;
-        const text = canvas.value;
-        const selected = text.slice(start, end);
+        let charIndex = 0;
+        const range = document.createRange();
+        range.setStart(element, 0);
+        range.collapse(true);
+        let nodeStack = [element];
+        let node;
+        let foundStart = false;
+        let stop = false;
 
-        const wrapped = `${before}${selected}${after}`;
-        canvas.setRangeText(wrapped, start, end, 'select');
-        canvas.dispatchEvent(new Event('input'));
+        while (!stop && (node = nodeStack.pop())) {
+            if (node.nodeType === 3) {
+                const nextCharIndex = charIndex + node.length;
+                if (!foundStart && start >= charIndex && start <= nextCharIndex) {
+                    range.setStart(node, start - charIndex);
+                    foundStart = true;
+                }
+                if (foundStart && end >= charIndex && end <= nextCharIndex) {
+                    range.setEnd(node, end - charIndex);
+                    stop = true;
+                }
+                charIndex = nextCharIndex;
+            } else {
+                let i = node.childNodes.length;
+                while (i--) {
+                    nodeStack.push(node.childNodes[i]);
+                }
+            }
+        }
+
+        sel.removeAllRanges();
+        sel.addRange(range);
     }
 
-    _prependLinePrefix(prefix) {
-        const canvas = this.container.querySelector('#editor-canvas');
-        if (!canvas) return;
+    _saveSelection(containerEl) {
+        try {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return null;
+            const range = sel.getRangeAt(0);
+            if (!containerEl.contains(range.commonAncestorContainer)) return null;
 
-        const start = canvas.selectionStart;
-        const text = canvas.value;
-        const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+            const preRange = range.cloneRange();
+            preRange.selectNodeContents(containerEl);
+            preRange.setEnd(range.startContainer, range.startOffset);
+            const start = preRange.toString().length;
 
-        const newText = text.slice(0, lineStart) + prefix + text.slice(lineStart);
-        canvas.value = newText;
-        canvas.dispatchEvent(new Event('input'));
-        canvas.focus();
+            return {
+                start: start,
+                end: start + range.toString().length
+            };
+        } catch (e) {
+            return null;
+        }
     }
 
-    _insertTextAtCursor(textToInsert) {
-        const canvas = this.container.querySelector('#editor-canvas');
-        if (!canvas) return;
-        const start = canvas.selectionStart;
-        const end = canvas.selectionEnd;
-        canvas.setRangeText(textToInsert, start, end, 'end');
-        canvas.dispatchEvent(new Event('input'));
+    _restoreSelection(containerEl, savedSel) {
+        if (!savedSel) return;
+        this._setCaretPosition(containerEl, savedSel.start, savedSel.end);
     }
 
     _updateCounters() {
         const canvas = this.container.querySelector('#editor-canvas');
         if (!canvas) return;
-        const text = canvas.value;
+        const text = canvas.innerText || canvas.textContent || '';
         const words = text.trim() ? text.trim().split(/\s+/).length : 0;
         const chars = text.length;
 
@@ -462,8 +587,8 @@ export class Editor {
         const canvas = this.container.querySelector('#editor-canvas');
         if (!canvas) return;
 
-        const oldValue = canvas.value;
-        canvas.value = newFullText;
+        const oldValue = canvas.innerHTML;
+        canvas.innerHTML = newFullText;
         const ops = diffText(oldValue, newFullText);
         if (ops.length > 0) {
             socketService.sendOperation(this.docId, ops, this.docVersion);
@@ -471,5 +596,6 @@ export class Editor {
         }
         this.previousValue = newFullText;
         this._updateCounters();
+        this._updateActiveToolbarStates();
     }
 }
